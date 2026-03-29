@@ -2,7 +2,7 @@
 //  CheckmarkView.swift
 //  MotionLab
 //
-//  Experiment 01 — Hand-crafted checkbox with haptics + scratch sound
+//  Experiment 01 — Checkbox with haptics + scratch sound
 //
 
 import SwiftUI
