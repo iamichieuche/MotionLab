@@ -168,6 +168,17 @@ struct TaskRow: View {
     let subtitle: String
     @Binding var isChecked: Bool
 
+    // Controls how much of the strikethrough line is drawn.
+    // 0 = invisible, 1 = fully across the text.
+    // This mirrors exactly the same trim technique used on the checkmark —
+    // the same concept, applied to a different shape.
+    @State private var strikeProgress: CGFloat = 0
+
+    // The scratch sound clip is 2 seconds long, so we match the
+    // animation duration to 2 seconds — the line draws at the same
+    // rate the sound plays, making them feel physically connected.
+    private let scratchDuration: Double = 0.4
+
     var body: some View {
         HStack(spacing: 14) {
             RoundedRectangle(cornerRadius: 10)
@@ -183,8 +194,24 @@ struct TaskRow: View {
                 Text(title)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.primary)
-                    .strikethrough(isChecked, color: Color.black.opacity(0.3))
-                    .animation(.easeInOut(duration: 0.2), value: isChecked)
+                    // Instead of `.strikethrough`, we use an overlay with a
+                    // custom line that can be trimmed and animated.
+                    // `GeometryReader` tells us the exact pixel width of the
+                    // text so the line stretches perfectly across it.
+                    .overlay(
+                        GeometryReader { geo in
+                            Path { path in
+                                let y = geo.size.height / 2
+                                path.move(to: CGPoint(x: 0, y: y))
+                                path.addLine(to: CGPoint(x: geo.size.width, y: y))
+                            }
+                            .trim(from: 0, to: strikeProgress)
+                            .stroke(
+                                Color.black.opacity(0.35),
+                                style: StrokeStyle(lineWidth: 1.5, lineCap: .round)
+                            )
+                        }
+                    )
 
                 Text(subtitle)
                     .font(.system(size: 13))
@@ -193,23 +220,20 @@ struct TaskRow: View {
 
             Spacer()
 
-            // When the checkbox inside the row is tapped, the Checkbox view
-            // handles its own haptic + sound. But we also want a second haptic
-            // to fire slightly later, timed with the strikethrough appearing —
-            // so the list row itself reacts to the completion moment.
-            // We watch `isChecked` change using `onChange` and fire a delayed haptic.
             Checkbox(isChecked: $isChecked)
                 .onChange(of: isChecked) { _, newValue in
                     if newValue {
-                        // Fire the scratch sound at the same moment the
-                        // strikethrough starts drawing — so it sounds like
-                        // the line is being physically drawn across the text.
+                        // Sound and line animation start at exactly the same moment.
+                        // The animation duration matches the clip length so they
+                        // finish together — sound and visuals in sync.
                         FeedbackEngine.scratchSound()
-
-                        // Completion haptic lands slightly after, as the
-                        // strikethrough finishes — a second punctuation beat.
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            FeedbackEngine.completionHaptic()
+                        withAnimation(.linear(duration: scratchDuration)) {
+                            strikeProgress = 1
+                        }
+                    } else {
+                        // Erase quickly on uncheck — no sound needed going back.
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            strikeProgress = 0
                         }
                     }
                 }
