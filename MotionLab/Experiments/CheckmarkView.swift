@@ -201,7 +201,7 @@ struct TaskRow: View {
                 Text(title)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.primary)
-                    .opacity(isChecked ? 0.6 : 1)
+                    .opacity(isChecked ? 0.5 : 1)
                     .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isChecked)
                     // Instead of `.strikethrough`, we use an overlay with a
                     // custom line that can be trimmed and animated.
@@ -225,7 +225,7 @@ struct TaskRow: View {
                 Text(subtitle)
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
-                    .opacity(isChecked ? 0.4 : 1)
+                    .opacity(isChecked ? 0.35 : 1)
                     .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isChecked)
             }
 
@@ -236,7 +236,7 @@ struct TaskRow: View {
                     if newValue {
                         if soundEnabled { FeedbackEngine.shared.scratchSound() }
                     }
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                    withAnimation(newValue ? .spring(response: 0.35, dampingFraction: 0.7) : .easeOut(duration: 0.25)) {
                         strikeProgress = newValue ? 1 : 0
                     }
                 }
