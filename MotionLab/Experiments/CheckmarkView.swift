@@ -9,82 +9,81 @@ import SwiftUI
 import AVFoundation  // Apple's audio framework — needed to play sounds
 
 // MARK: - Haptic + Sound Engine
-// A small helper that lives outside of any view.
-// We keep it separate so any experiment can reuse it later.
 //
-// `UIImpactFeedbackGenerator` talks directly to the Taptic Engine — the
-// physical vibration motor inside your iPhone. You choose an intensity
-// style (.light, .medium, .heavy, .rigid, .soft) and call `.impactOccurred()`.
+// Key design decisions:
 //
-// `AVAudioPlayer` plays an audio file from your bundle. We use system sounds
-// here via `AudioServicesPlaySystemSound` so there's nothing to import —
-// Apple ships hundreds of short UI sounds baked into iOS.
-struct FeedbackEngine {
+// 1. Generators are PERSISTENT static instances, not recreated per tap.
+//    Creating a new UIImpactFeedbackGenerator every tap means `prepare()`
+//    has no time to warm up the Taptic Engine, causing inconsistent intensity.
+//    Keeping one instance alive means it stays warm and fires consistently.
+//
+// 2. AVAudioSession is configured once at startup.
+//    Without this, sounds are routed through the ringer channel and affected
+//    by the silent switch and system volume inconsistently. `.playback` category
+//    gives us a dedicated, consistent audio channel.
+//
+// 3. Audio players are pre-loaded, not created on every play.
+//    Recreating AVAudioPlayer on each tap introduces latency and inconsistency.
+class FeedbackEngine {
 
-    // Haptic for checking — medium weight, feels decisive
-    static func checkHaptic() {
-        let generator = UIImpactFeedbackGenerator(style: .medium)
-        generator.prepare() // `prepare` warms up the engine so there's no delay
-        generator.impactOccurred()
+    static let shared = FeedbackEngine()
+
+    // Persistent generators — created once, stay warm
+    private let checkGenerator   = UIImpactFeedbackGenerator(style: .medium)
+    private let uncheckGenerator = UIImpactFeedbackGenerator(style: .light)
+
+    // Pre-loaded audio players
+    private var checkPlayer:   AVAudioPlayer?
+    private var uncheckPlayer: AVAudioPlayer?
+    private var scratchPlayer: AVAudioPlayer?
+
+    private init() {
+        // Configure audio session once — consistent volume, ignores silent switch
+        try? AVAudioSession.sharedInstance().setCategory(.playback, options: .mixWithOthers)
+        try? AVAudioSession.sharedInstance().setActive(true)
+
+        // Pre-load all sounds so they're ready to fire instantly
+        checkPlayer   = player(forResource: "check",   volume: 0.5)
+        uncheckPlayer = player(forResource: "uncheck", volume: 0.4)
+        scratchPlayer = player(forResource: "scratch", volume: 0.6)
+
+        // Pre-warm generators so first tap feels identical to every other tap
+        checkGenerator.prepare()
+        uncheckGenerator.prepare()
     }
 
-    // Haptic for unchecking — lighter, feels like a release
-    static func uncheckHaptic() {
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.prepare()
-        generator.impactOccurred()
+    private func player(forResource name: String, volume: Float) -> AVAudioPlayer? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "wav")
+                     ?? Bundle.main.url(forResource: name, withExtension: "mp3") else { return nil }
+        let p = try? AVAudioPlayer(contentsOf: url)
+        p?.volume = volume
+        p?.prepareToPlay() // Buffers the file so first play has zero latency
+        return p
     }
 
-    // A second, softer haptic fired slightly after the strikethrough animates —
-    // punctuates the "task done" moment on the list row.
-    // `UINotificationFeedbackGenerator` has three styles: .success, .warning, .error.
-    // `.success` is a double-tap pattern — satisfying for completion.
-    static func completionHaptic() {
-        let generator = UINotificationFeedbackGenerator()
-        generator.prepare()
-        generator.notificationOccurred(.success)
+    func checkHaptic() {
+        checkGenerator.impactOccurred()
+        checkGenerator.prepare() // Re-warm immediately for the next tap
     }
 
-    // System sound IDs are Apple's built-in library of short UI sounds.
-    // 1104 = a soft, clean tick (used in Clock app)
-    // 1105 = a slightly softer tick — good for unchecking
-    // These don't require any audio files in your project — they're baked into iOS.
-    static func checkSound() {
-        AudioServicesPlaySystemSound(1104)
+    func uncheckHaptic() {
+        uncheckGenerator.impactOccurred()
+        uncheckGenerator.prepare()
     }
 
-    static func uncheckSound() {
-        AudioServicesPlaySystemSound(1105)
+    func checkSound() {
+        checkPlayer?.currentTime = 0
+        checkPlayer?.play()
     }
 
-    // Scratch sound — plays a custom audio file from your app bundle.
-    //
-    // `Bundle.main` is your app's package — everything you add to Xcode
-    // lives here at runtime. `url(forResource:withExtension:)` finds your
-    // file by name. If it returns nil, the file isn't in the bundle yet.
-    //
-    // `AVAudioPlayer` loads the file into memory and plays it.
-    // We store it as a static var so it isn't deallocated mid-playback —
-    // if the player gets destroyed while the sound is playing, it cuts off instantly.
-    //
-    // TO ADD YOUR SOUND: drag a file named "scratch.wav" or "scratch.mp3"
-    // into the MotionLab folder in Xcode's project navigator.
-    // Tick "Add to target: MotionLab" in the import dialog.
-    private static var scratchPlayer: AVAudioPlayer?
+    func uncheckSound() {
+        uncheckPlayer?.currentTime = 0
+        uncheckPlayer?.play()
+    }
 
-    static func scratchSound() {
-        guard let url = Bundle.main.url(forResource: "scratch", withExtension: "wav")
-                     ?? Bundle.main.url(forResource: "scratch", withExtension: "mp3") else {
-            // File not added yet — silently does nothing until you drop it in
-            return
-        }
-        do {
-            scratchPlayer = try AVAudioPlayer(contentsOf: url)
-            scratchPlayer?.volume = 0.6  // Subtle, like a real pen
-            scratchPlayer?.play()
-        } catch {
-            // If something goes wrong loading the file, skip the sound
-        }
+    func scratchSound() {
+        scratchPlayer?.currentTime = 0
+        scratchPlayer?.play()
     }
 }
 
@@ -109,57 +108,63 @@ struct CheckmarkShape: Shape {
     }
 }
 
+// MARK: - Checkbox Press Style
+// Scales down while finger is held, springs back on release.
+// This is a true press effect — the view responds to finger down/up,
+// not just the completed tap. That physical responsiveness is what
+// makes it feel like a real button rather than a tappable element.
+struct CheckboxPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
 // MARK: - Reusable Checkbox
 struct Checkbox: View {
     @Binding var isChecked: Bool
     var soundEnabled: Bool = true
     @State private var trimTo: CGFloat = 0
-    @State private var scale: CGFloat = 1.0
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white)
-                .frame(width: 36, height: 36)
-                .shadow(color: Color.black.opacity(0.05), radius: 1, x: 0, y: 0)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
-                )
-
-            CheckmarkShape(trimTo: trimTo)
-                .trim(from: 0, to: trimTo)
-                .stroke(
-                    Color(hex: "#555555"),
-                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-                )
-                .frame(width: 36, height: 36)
-        }
-        .scaleEffect(scale)
-        .onTapGesture {
+        // Using Button instead of onTapGesture gives us access to the real press state —
+        // `configuration.isPressed` is true while your finger is DOWN, false when lifted.
+        // onTapGesture only fires on release, so it can never feel like a physical press.
+        Button {
             isChecked.toggle()
 
-            // Fire haptic and sound immediately on tap — before the animation.
-            // This is intentional: haptics feel most natural when they land
-            // at the exact moment of the gesture, not after a delay.
             if isChecked {
-                FeedbackEngine.checkHaptic()
-                if soundEnabled { FeedbackEngine.checkSound() }
+                FeedbackEngine.shared.checkHaptic()
+                if soundEnabled { FeedbackEngine.shared.checkSound() }
             } else {
-                FeedbackEngine.uncheckHaptic()
-                if soundEnabled { FeedbackEngine.uncheckSound() }
+                FeedbackEngine.shared.uncheckHaptic()
+                if soundEnabled { FeedbackEngine.shared.uncheckSound() }
             }
 
-            withAnimation(.interactiveSpring(response: 0.15, dampingFraction: 0.6)) {
-                scale = 0.85
-            }
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.5).delay(0.1)) {
-                scale = 1.0
-            }
-            withAnimation(.easeInOut(duration: 0.3)) {
+            withAnimation(isChecked ? .spring(response: 0.35, dampingFraction: 0.7) : .easeOut(duration: 0.25)) {
                 trimTo = isChecked ? 1 : 0
             }
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isChecked ? Color(hex: "#F0F0F0") : Color.white)
+                    .frame(width: 36, height: 36)
+                    .shadow(color: Color.black.opacity(0.05), radius: 1, x: 0, y: 0)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                    )
+                CheckmarkShape(trimTo: trimTo)
+                    .trim(from: 0, to: trimTo)
+                    .stroke(
+                        Color(hex: "#555555"),
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+                    )
+                    .frame(width: 36, height: 36)
+            }
         }
+        .buttonStyle(CheckboxPressStyle())
     }
 }
 
@@ -196,6 +201,8 @@ struct TaskRow: View {
                 Text(title)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.primary)
+                    .opacity(isChecked ? 0.6 : 1)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isChecked)
                     // Instead of `.strikethrough`, we use an overlay with a
                     // custom line that can be trimmed and animated.
                     // `GeometryReader` tells us the exact pixel width of the
@@ -218,6 +225,8 @@ struct TaskRow: View {
                 Text(subtitle)
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
+                    .opacity(isChecked ? 0.4 : 1)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isChecked)
             }
 
             Spacer()
@@ -225,14 +234,10 @@ struct TaskRow: View {
             Checkbox(isChecked: $isChecked, soundEnabled: soundEnabled)
                 .onChange(of: isChecked) { _, newValue in
                     if newValue {
-                        if soundEnabled { FeedbackEngine.scratchSound() }
-                        withAnimation(.linear(duration: scratchDuration)) {
-                            strikeProgress = 1
-                        }
-                    } else {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            strikeProgress = 0
-                        }
+                        if soundEnabled { FeedbackEngine.shared.scratchSound() }
+                    }
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                        strikeProgress = newValue ? 1 : 0
                     }
                 }
         }
