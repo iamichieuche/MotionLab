@@ -112,6 +112,7 @@ struct CheckmarkShape: Shape {
 // MARK: - Reusable Checkbox
 struct Checkbox: View {
     @Binding var isChecked: Bool
+    var soundEnabled: Bool = true
     @State private var trimTo: CGFloat = 0
     @State private var scale: CGFloat = 1.0
 
@@ -143,10 +144,10 @@ struct Checkbox: View {
             // at the exact moment of the gesture, not after a delay.
             if isChecked {
                 FeedbackEngine.checkHaptic()
-                FeedbackEngine.checkSound()
+                if soundEnabled { FeedbackEngine.checkSound() }
             } else {
                 FeedbackEngine.uncheckHaptic()
-                FeedbackEngine.uncheckSound()
+                if soundEnabled { FeedbackEngine.uncheckSound() }
             }
 
             withAnimation(.interactiveSpring(response: 0.15, dampingFraction: 0.6)) {
@@ -167,6 +168,7 @@ struct TaskRow: View {
     let title: String
     let subtitle: String
     @Binding var isChecked: Bool
+    var soundEnabled: Bool = true
 
     // Controls how much of the strikethrough line is drawn.
     // 0 = invisible, 1 = fully across the text.
@@ -220,18 +222,14 @@ struct TaskRow: View {
 
             Spacer()
 
-            Checkbox(isChecked: $isChecked)
+            Checkbox(isChecked: $isChecked, soundEnabled: soundEnabled)
                 .onChange(of: isChecked) { _, newValue in
                     if newValue {
-                        // Sound and line animation start at exactly the same moment.
-                        // The animation duration matches the clip length so they
-                        // finish together — sound and visuals in sync.
-                        FeedbackEngine.scratchSound()
+                        if soundEnabled { FeedbackEngine.scratchSound() }
                         withAnimation(.linear(duration: scratchDuration)) {
                             strikeProgress = 1
                         }
                     } else {
-                        // Erase quickly on uncheck — no sound needed going back.
                         withAnimation(.easeInOut(duration: 0.2)) {
                             strikeProgress = 0
                         }
@@ -246,11 +244,80 @@ struct TaskRow: View {
     }
 }
 
+// MARK: - Press Scale Button Style
+// A custom ButtonStyle that adds a 0.96 scale on press — the standard
+// value for tactile button feedback. Using a ButtonStyle means this
+// works interruptibly: if you release early, it springs back immediately.
+struct PressScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.spring(response: 0.2, dampingFraction: 0.8), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Sound Toggle Pill
+struct SoundTogglePill: View {
+    @Binding var soundEnabled: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                soundEnabled.toggle()
+            }
+            let g = UIImpactFeedbackGenerator(style: .light)
+            g.prepare()
+            g.impactOccurred()
+        } label: {
+            HStack(spacing: 8) {
+
+                // Cross-fading icon — both icons live in a ZStack simultaneously.
+                // One fades + scales + blurs out as the other fades + scales + blurs in.
+                // This is smoother than swapping a single icon's systemName because
+                // SwiftUI can animate both directions at once.
+                ZStack {
+                    Image(systemName: "speaker.wave.2.fill")
+                        .opacity(soundEnabled ? 1 : 0)
+                        .scaleEffect(soundEnabled ? 1 : 0.5)
+                        .blur(radius: soundEnabled ? 0 : 4)
+
+                    Image(systemName: "speaker.slash.fill")
+                        .opacity(soundEnabled ? 0 : 1)
+                        .scaleEffect(soundEnabled ? 0.5 : 1)
+                        .blur(radius: soundEnabled ? 4 : 0)
+                }
+                .font(.system(size: 14, weight: .medium))
+                .frame(width: 18, height: 18) // Fixed frame so the icon swap never shifts layout
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: soundEnabled)
+
+                // Fixed width prevents the pill from resizing between "Sound on" and "Sound off".
+                // Without this, the different text lengths cause the capsule to jump size on toggle.
+                Text(soundEnabled ? "Sound on" : "Sound off")
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 72, alignment: .leading)
+            }
+            .foregroundColor(soundEnabled ? Color(hex: "#333333") : Color(hex: "#AAAAAA"))
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: soundEnabled)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(
+                Capsule()
+                    .fill(Color(hex: "#EBEBEB"))
+            )
+        }
+        .buttonStyle(PressScaleButtonStyle())
+    }
+}
+
 // MARK: - Main View
 struct CheckmarkView: View {
     @State private var checked1 = false
     @State private var checked2 = false
     @State private var checked3 = false
+
+    // Single source of truth for sound — owned here, passed down to rows.
+    // This is the same @Binding pattern: one parent owns it, children read it.
+    @State private var soundEnabled = true
 
     var body: some View {
         ZStack {
@@ -266,7 +333,7 @@ struct CheckmarkView: View {
                         .textCase(.uppercase)
                         .tracking(1)
 
-                    Checkbox(isChecked: $checked1)
+                    Checkbox(isChecked: $checked1, soundEnabled: soundEnabled)
                 }
                 .padding(.top, 80)
 
@@ -285,19 +352,26 @@ struct CheckmarkView: View {
                     TaskRow(
                         title: "Review design handoff",
                         subtitle: "Due today · Figma",
-                        isChecked: $checked2
+                        isChecked: $checked2,
+                        soundEnabled: soundEnabled
                     )
 
                     TaskRow(
                         title: "Push Motion Lab to device",
                         subtitle: "In progress · Xcode",
-                        isChecked: $checked3
+                        isChecked: $checked3,
+                        soundEnabled: soundEnabled
                     )
                 }
                 .padding(.horizontal, 24)
 
                 Spacer()
             }
+
+            // Floating pill pinned to the bottom, layered above everything.
+            SoundTogglePill(soundEnabled: $soundEnabled)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, 48)
         }
     }
 }
