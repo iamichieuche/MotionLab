@@ -148,17 +148,17 @@ struct Checkbox: View {
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isChecked ? Color(hex: "#F0F0F0") : Color.white)
+                    .fill(isChecked ? Color(.systemGray4) : Color(.tertiarySystemGroupedBackground))
                     .frame(width: 36, height: 36)
                     .shadow(color: Color.black.opacity(0.05), radius: 1, x: 0, y: 0)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                            .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
                     )
                 CheckmarkShape(trimTo: trimTo)
                     .trim(from: 0, to: trimTo)
                     .stroke(
-                        Color(hex: "#555555"),
+                        Color.primary.opacity(0.6),
                         style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
                     )
                     .frame(width: 36, height: 36)
@@ -189,11 +189,11 @@ struct TaskRow: View {
     var body: some View {
         HStack(spacing: 14) {
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.black.opacity(0.05))
+                .fill(Color(.tertiarySystemGroupedBackground))
                 .frame(width: 42, height: 42)
                 .overlay(
                     Image(systemName: "doc.text")
-                        .foregroundColor(Color.black.opacity(0.3))
+                        .foregroundColor(.secondary)
                         .font(.system(size: 16))
                 )
 
@@ -243,23 +243,12 @@ struct TaskRow: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .background(Color.white)
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(14)
-        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
     }
 }
 
-// MARK: - Press Scale Button Style
-// A custom ButtonStyle that adds a 0.96 scale on press — the standard
-// value for tactile button feedback. Using a ButtonStyle means this
-// works interruptibly: if you release early, it springs back immediately.
-struct PressScaleButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .animation(.spring(response: 0.2, dampingFraction: 0.8), value: configuration.isPressed)
-    }
-}
 
 // MARK: - Sound Toggle Pill
 struct SoundTogglePill: View {
@@ -301,13 +290,13 @@ struct SoundTogglePill: View {
                     .font(.system(size: 14, weight: .medium))
                     .frame(width: 72, alignment: .leading)
             }
-            .foregroundColor(soundEnabled ? Color(hex: "#333333") : Color(hex: "#AAAAAA"))
+            .foregroundColor(soundEnabled ? .primary : .secondary)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: soundEnabled)
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(
                 Capsule()
-                    .fill(Color(hex: "#EBEBEB"))
+                    .fill(Color(.systemGray5))
             )
         }
         .buttonStyle(PressScaleButtonStyle())
@@ -326,7 +315,7 @@ struct CheckmarkView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "#F7F7F7")
+            Color(.systemGroupedBackground)
                 .ignoresSafeArea()
 
             VStack(spacing: 24) {
