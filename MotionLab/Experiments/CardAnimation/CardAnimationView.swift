@@ -23,6 +23,9 @@ struct CardAnimationView: View {
     // Shimmer — increments each entrance so onChange always fires
     @State private var shimmerTrigger: Int = 0
 
+    // Sound
+    @State private var soundEnabled: Bool = true
+
     // Post-entry effects
     @State private var floatOffsetY: CGFloat = 0
     @State private var floatOffsetX: CGFloat = 0  // secondary drift — different period
@@ -75,22 +78,26 @@ struct CardAnimationView: View {
                     }
             )
 
-            // MARK: — Replay pill
-            Button {
-                replay()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 14, weight: .medium))
-                    Text("Replay")
-                        .font(.system(size: 14, weight: .medium))
+            // MARK: — Bottom controls
+            HStack(spacing: 12) {
+                SoundTogglePill(soundEnabled: $soundEnabled)
+
+                Button {
+                    replay()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Replay")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(Color(.systemGray5)))
                 }
-                .foregroundColor(.primary)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(Capsule().fill(Color(.systemGray5)))
+                .buttonStyle(PressScaleButtonStyle())
             }
-            .buttonStyle(PressScaleButtonStyle())
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .padding(.bottom, 72)
         }
@@ -144,14 +151,20 @@ struct CardAnimationView: View {
                 }
             }
 
-            // Haptic + confetti as spring settles
+            // Haptic + land sound as spring settles
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
                 let g = UIImpactFeedbackGenerator(style: .medium)
                 g.prepare()
                 g.impactOccurred()
+                if soundEnabled { CardSoundEngine.shared.playLand() }
 
                 shimmerTrigger += 1
                 isSettled = true
+
+                // Shimmer sound fires with the visual sweep
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    if soundEnabled { CardSoundEngine.shared.playShimmer() }
+                }
 
                 // Float begins — two independent oscillations so motion never feels mechanical
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
