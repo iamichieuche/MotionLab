@@ -114,10 +114,12 @@ struct CheckmarkShape: Shape {
 // not just the completed tap. That physical responsiveness is what
 // makes it feel like a real button rather than a tappable element.
 struct CheckboxPressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.85 : 1.0)
-            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
+            .animation(reduceMotion ? .none : .snappy(duration: 0.2), value: configuration.isPressed)
     }
 }
 
@@ -126,6 +128,7 @@ struct Checkbox: View {
     @Binding var isChecked: Bool
     var soundEnabled: Bool = true
     @State private var trimTo: CGFloat = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         // Using Button instead of onTapGesture gives us access to the real press state —
@@ -142,7 +145,7 @@ struct Checkbox: View {
                 if soundEnabled { FeedbackEngine.shared.uncheckSound() }
             }
 
-            withAnimation(isChecked ? .spring(response: 0.35, dampingFraction: 0.7) : .easeOut(duration: 0.25)) {
+            withAnimation(reduceMotion ? .none : (isChecked ? .bouncy(duration: 0.35) : .easeOut(duration: 0.25))) {
                 trimTo = isChecked ? 1 : 0
             }
         } label: {
@@ -183,6 +186,7 @@ struct TaskRow: View {
     // This mirrors exactly the same trim technique used on the checkmark —
     // the same concept, applied to a different shape.
     @State private var strikeProgress: CGFloat = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // The scratch sound clip is 2 seconds long, so we match the
     // animation duration to 2 seconds — the line draws at the same
@@ -196,7 +200,7 @@ struct TaskRow: View {
                     if newValue {
                         if soundEnabled { FeedbackEngine.shared.scratchSound() }
                     }
-                    withAnimation(newValue ? .spring(response: 0.35, dampingFraction: 0.7) : .easeOut(duration: 0.25)) {
+                    withAnimation(reduceMotion ? .none : (newValue ? .bouncy(duration: 0.35) : .easeOut(duration: 0.25))) {
                         strikeProgress = newValue ? 1 : 0
                     }
                 }
@@ -205,15 +209,17 @@ struct TaskRow: View {
                 Text(title)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.primary)
-                    .opacity(isChecked ? 0.5 : 1)
                     .strikethrough(strikeProgress > 0.5, color: Color.primary.opacity(0.35))
-                    .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isChecked)
+                    .animation(reduceMotion ? .none : .snappy(duration: 0.35)) { content in
+                        content.opacity(isChecked ? 0.5 : 1)
+                    }
 
                 Text(subtitle)
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
-                    .opacity(isChecked ? 0.35 : 1)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isChecked)
+                    .animation(reduceMotion ? .none : .snappy(duration: 0.35)) { content in
+                        content.opacity(isChecked ? 0.35 : 1)
+                    }
             }
 
             Spacer()
@@ -243,7 +249,7 @@ struct SoundTogglePill: View {
 
     var body: some View {
         Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            withAnimation(.snappy(duration: 0.3)) {
                 soundEnabled.toggle()
             }
             let g = UIImpactFeedbackGenerator(style: .light)
@@ -251,34 +257,17 @@ struct SoundTogglePill: View {
             g.impactOccurred()
         } label: {
             HStack(spacing: 8) {
+                Image(systemName: soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                    .contentTransition(.symbolEffect(.replace.downUp))
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 18, height: 18)
 
-                // Cross-fading icon — both icons live in a ZStack simultaneously.
-                // One fades + scales + blurs out as the other fades + scales + blurs in.
-                // This is smoother than swapping a single icon's systemName because
-                // SwiftUI can animate both directions at once.
-                ZStack {
-                    Image(systemName: "speaker.wave.2.fill")
-                        .opacity(soundEnabled ? 1 : 0)
-                        .scaleEffect(soundEnabled ? 1 : 0.5)
-                        .blur(radius: soundEnabled ? 0 : 4)
-
-                    Image(systemName: "speaker.slash.fill")
-                        .opacity(soundEnabled ? 0 : 1)
-                        .scaleEffect(soundEnabled ? 0.5 : 1)
-                        .blur(radius: soundEnabled ? 4 : 0)
-                }
-                .font(.system(size: 14, weight: .medium))
-                .frame(width: 18, height: 18) // Fixed frame so the icon swap never shifts layout
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: soundEnabled)
-
-                // Fixed width prevents the pill from resizing between "Sound on" and "Sound off".
-                // Without this, the different text lengths cause the capsule to jump size on toggle.
                 Text(soundEnabled ? "Sound on" : "Sound off")
                     .font(.system(size: 14, weight: .medium))
                     .frame(width: 72, alignment: .leading)
             }
             .foregroundColor(soundEnabled ? .primary : .secondary)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: soundEnabled)
+            .animation(.snappy(duration: 0.3), value: soundEnabled)
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(

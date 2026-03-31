@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "swiftui-animation": {
+      "source": "dpearson2699/swift-ios-skills",
+      "sourceType": "github",
+      "computedHash": "9fefcdb010a1817213324470f1a6eddec3b83d887a2b8b90dc17f0eb73d78d96"
+    }
+  }
+}
