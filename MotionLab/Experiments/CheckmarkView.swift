@@ -320,16 +320,8 @@ struct CheckmarkView: View {
 
             VStack(spacing: 24) {
 
-                VStack(spacing: 8) {
-                    Text("Component")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .textCase(.uppercase)
-                        .tracking(1)
-
-                    Checkbox(isChecked: $checked1, soundEnabled: soundEnabled)
-                }
-                .padding(.top, 80)
+                Checkbox(isChecked: $checked1, soundEnabled: soundEnabled)
+                    .padding(.top, 80)
 
                 Spacer()
                     .frame(height: 48)
