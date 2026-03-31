@@ -206,25 +206,8 @@ struct TaskRow: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.primary)
                     .opacity(isChecked ? 0.5 : 1)
+                    .strikethrough(strikeProgress > 0.5, color: Color.primary.opacity(0.35))
                     .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isChecked)
-                    // Instead of `.strikethrough`, we use an overlay with a
-                    // custom line that can be trimmed and animated.
-                    // `GeometryReader` tells us the exact pixel width of the
-                    // text so the line stretches perfectly across it.
-                    .overlay(
-                        GeometryReader { geo in
-                            Path { path in
-                                let y = geo.size.height / 2
-                                path.move(to: CGPoint(x: 0, y: y))
-                                path.addLine(to: CGPoint(x: geo.size.width, y: y))
-                            }
-                            .trim(from: 0, to: strikeProgress)
-                            .stroke(
-                                Color.primary.opacity(0.35),
-                                style: StrokeStyle(lineWidth: 1.5, lineCap: .round)
-                            )
-                        }
-                    )
 
                 Text(subtitle)
                     .font(.system(size: 13))
