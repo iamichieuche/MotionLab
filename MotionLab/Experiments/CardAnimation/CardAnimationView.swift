@@ -42,7 +42,7 @@ struct CardAnimationView: View {
 
                 // MARK: — Context header
                 Text("Your business account is ready!")
-                    .font(.title2.weight(.bold))
+                    .font(.title.weight(.bold))
                     .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
