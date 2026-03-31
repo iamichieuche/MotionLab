@@ -29,8 +29,8 @@ struct BusinessCardView: View {
     // Returns static centre when reduceMotion is enabled.
     var holoCenter: UnitPoint {
         guard !reduceMotion else { return UnitPoint(x: 0.5, y: 0.5) }
-        let x = 0.5 + CGFloat(roll.clamped(to: -0.5...0.5))  * 0.7
-        let y = 0.5 + CGFloat(pitch.clamped(to: -0.5...0.5)) * 0.7
+        let x = 0.5 + CGFloat(min(max(roll,   -0.5), 0.5)) * 0.7
+        let y = 0.5 + CGFloat(min(max(pitch,  -0.5), 0.5)) * 0.7
         return UnitPoint(x: x, y: y)
     }
 
@@ -56,46 +56,7 @@ struct BusinessCardView: View {
                 .accessibilityHidden(true)
 
             // MARK: Layer 3 — Iridescent holographic foil
-            // Two angular gradients at opposing centres — simulates real foil interference.
-            // Opacities animate on press to intensify the effect.
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(
-                    AngularGradient(
-                        colors: [
-                            Color(hex: "#FF6B9D"),
-                            Color(hex: "#C44FFF"),
-                            Color(hex: "#4F8FFF"),
-                            Color(hex: "#4FFFB0"),
-                            Color(hex: "#FFE94F"),
-                            Color(hex: "#FF9A4F"),
-                            Color(hex: "#FF6B9D"),
-                        ],
-                        center: holoCenter
-                    )
-                )
-                .opacity(holoOpacity1)
-                .blendMode(.overlay)
-                .animation(.easeOut(duration: 0.2), value: isPressing)
-                .accessibilityHidden(true)
-
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(
-                    AngularGradient(
-                        colors: [
-                            Color(hex: "#4FFFB0"),
-                            Color(hex: "#FFE94F"),
-                            Color(hex: "#FF6B9D"),
-                            Color(hex: "#4F8FFF"),
-                            Color(hex: "#C44FFF"),
-                            Color(hex: "#4FFFB0"),
-                        ],
-                        center: UnitPoint(x: 1 - holoCenter.x, y: 1 - holoCenter.y)
-                    )
-                )
-                .opacity(holoOpacity2)
-                .blendMode(.overlay)
-                .animation(.easeOut(duration: 0.2), value: isPressing)
-                .accessibilityHidden(true)
+            holoLayers.accessibilityHidden(true)
 
             // MARK: Layer 4 — Shimmer sweep
             // Diagonal white gradient that crosses the card once on reveal —
@@ -142,17 +103,45 @@ struct BusinessCardView: View {
         .drawingGroup()
         .shadow(color: Color.black.opacity(0.16), radius: 11, x: 0, y: 3)
         .rotation3DEffect(
-            .degrees(reduceMotion ? 0 : pitch.clamped(to: -0.6...0.6) * 18),
+            .degrees(reduceMotion ? 0 : min(max(pitch, -0.6), 0.6) * 18),
             axis: (x: 1, y: 0, z: 0),
             perspective: 0.4
         )
         .rotation3DEffect(
-            .degrees(reduceMotion ? 0 : roll.clamped(to: -0.6...0.6) * -18),
+            .degrees(reduceMotion ? 0 : min(max(roll,  -0.6), 0.6) * -18),
             axis: (x: 0, y: 1, z: 0),
             perspective: 0.4
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Monzo Business Card for CAKE EXPECTATIONS")
+    }
+
+    // MARK: - Holographic Foil Layers
+    // Extracted to keep body type-checkable. Two angular gradients at opposing
+    // centres simulate real foil colour interference.
+    @ViewBuilder var holoLayers: some View {
+        let colors1: [Color] = [
+            Color(hex: "#FF6B9D"), Color(hex: "#C44FFF"), Color(hex: "#4F8FFF"),
+            Color(hex: "#4FFFB0"), Color(hex: "#FFE94F"), Color(hex: "#FF9A4F"),
+            Color(hex: "#FF6B9D"),
+        ]
+        let colors2: [Color] = [
+            Color(hex: "#4FFFB0"), Color(hex: "#FFE94F"), Color(hex: "#FF6B9D"),
+            Color(hex: "#4F8FFF"), Color(hex: "#C44FFF"), Color(hex: "#4FFFB0"),
+        ]
+        let center2 = UnitPoint(x: 1 - holoCenter.x, y: 1 - holoCenter.y)
+
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(AngularGradient(colors: colors1, center: holoCenter))
+            .opacity(holoOpacity1)
+            .blendMode(.overlay)
+            .animation(.easeOut(duration: 0.2), value: isPressing)
+
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(AngularGradient(colors: colors2, center: center2))
+            .opacity(holoOpacity2)
+            .blendMode(.overlay)
+            .animation(.easeOut(duration: 0.2), value: isPressing)
     }
 
     // MARK: - Business Name (foil-stamped)
