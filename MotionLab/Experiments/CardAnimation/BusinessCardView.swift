@@ -16,18 +16,21 @@ struct BusinessCardView: View {
     let contentOpacity: Double
     let isPressing: Bool
     let shimmerTrigger: Int
+    var cardWidth: CGFloat = 340
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shimmerX: CGFloat = -400
 
-    // Scaled from Figma: 250×157 → 340×213 (same 1.592:1 ratio)
-    private let cardWidth:  CGFloat = 340
-    private let cardHeight: CGFloat = 213
-    private let cornerRadius: CGFloat = 11
+    // Scaled proportionally from Figma: 250×157 → 340×213 (1.592:1 ratio)
+    private var cardHeight: CGFloat { (cardWidth / 340) * 213 }
+    private var cornerRadius: CGFloat { (cardWidth / 340) * 11 }
 
-    // Holographic gradient centre shifts with device tilt
+    // Holographic gradient centre shifts with device tilt.
+    // Returns static centre when reduceMotion is enabled.
     var holoCenter: UnitPoint {
-        let x = 0.5 + CGFloat(roll.clamped(to: -0.5...0.5))  * 0.7
-        let y = 0.5 + CGFloat(pitch.clamped(to: -0.5...0.5)) * 0.7
+        guard !reduceMotion else { return UnitPoint(x: 0.5, y: 0.5) }
+        let x = 0.5 + CGFloat(min(max(roll,   -0.5), 0.5)) * 0.7
+        let y = 0.5 + CGFloat(min(max(pitch,  -0.5), 0.5)) * 0.7
         return UnitPoint(x: x, y: y)
     }
 
@@ -44,125 +47,127 @@ struct BusinessCardView: View {
                 .scaledToFill()
                 .frame(width: cardWidth, height: cardHeight)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                .accessibilityHidden(true)
 
             // MARK: Layer 2 — Card elements (chip, monzo, mastercard, name)
             cardElements
                 .opacity(contentOpacity)
                 .animation(.easeOut(duration: 0.25), value: contentOpacity)
+                .accessibilityHidden(true)
 
             // MARK: Layer 3 — Iridescent holographic foil
-            // Two angular gradients at opposing centres — simulates real foil interference.
-            // Opacities animate on press to intensify the effect.
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(
-                    AngularGradient(
-                        colors: [
-                            Color(hex: "#FF6B9D"),
-                            Color(hex: "#C44FFF"),
-                            Color(hex: "#4F8FFF"),
-                            Color(hex: "#4FFFB0"),
-                            Color(hex: "#FFE94F"),
-                            Color(hex: "#FF9A4F"),
-                            Color(hex: "#FF6B9D"),
-                        ],
-                        center: holoCenter
-                    )
-                )
-                .opacity(holoOpacity1)
-                .blendMode(.overlay)
-                .animation(.easeOut(duration: 0.2), value: isPressing)
-
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(
-                    AngularGradient(
-                        colors: [
-                            Color(hex: "#4FFFB0"),
-                            Color(hex: "#FFE94F"),
-                            Color(hex: "#FF6B9D"),
-                            Color(hex: "#4F8FFF"),
-                            Color(hex: "#C44FFF"),
-                            Color(hex: "#4FFFB0"),
-                        ],
-                        center: UnitPoint(x: 1 - holoCenter.x, y: 1 - holoCenter.y)
-                    )
-                )
-                .opacity(holoOpacity2)
-                .blendMode(.overlay)
-                .animation(.easeOut(duration: 0.2), value: isPressing)
+            holoLayers.accessibilityHidden(true)
 
             // MARK: Layer 4 — Shimmer sweep
             // Diagonal white gradient that crosses the card once on reveal —
             // like a jeweller's light catching the surface as it's handed to you.
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            .clear,
-                            .white.opacity(0.18),
-                            .clear,
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
+            // Skipped entirely when reduceMotion is enabled.
+            if !reduceMotion {
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                .white.opacity(0.18),
+                                .clear,
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
                     )
-                )
-                .frame(width: 200, height: cardHeight * 3)
-                .rotationEffect(.degrees(10))
-                .offset(x: shimmerX)
-                .blendMode(.overlay)
-                .onChange(of: shimmerTrigger) { _, _ in
-                    shimmerX = -(cardWidth + 200)
-                    withAnimation(.linear(duration: 1.2)) {
-                        shimmerX = cardWidth + 200
+                    .frame(width: 200, height: cardHeight * 3)
+                    .rotationEffect(.degrees(10))
+                    .offset(x: shimmerX)
+                    .blendMode(.overlay)
+                    .onChange(of: shimmerTrigger) { _, _ in
+                        shimmerX = -(cardWidth + 200)
+                        withAnimation(.linear(duration: 1.2)) {
+                            shimmerX = cardWidth + 200
+                        }
                     }
-                }
+                    .accessibilityHidden(true)
+            }
 
             // MARK: Layer 5 — Business name (foil-stamped)
             // Sits above the holographic layers. Gradient highlight centre tracks holoCenter
             // so the bright spot sweeps across the letters as the card tilts — like light
-            // catching raised print on a physical card. Deboss shadow gives depth.
+            // catching raised print on a physical card.
+            // Min opacity raised to 0.65 + text shadow to ensure contrast compliance.
             businessName
                 .opacity(contentOpacity)
                 .animation(.easeOut(duration: 0.25), value: contentOpacity)
+                .accessibilityHidden(true)
         }
         .frame(width: cardWidth, height: cardHeight)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .drawingGroup()
         .shadow(color: Color.black.opacity(0.16), radius: 11, x: 0, y: 3)
         .rotation3DEffect(
-            .degrees(pitch.clamped(to: -0.6...0.6) * 18),
+            .degrees(reduceMotion ? 0 : min(max(pitch, -0.6), 0.6) * 18),
             axis: (x: 1, y: 0, z: 0),
             perspective: 0.4
         )
         .rotation3DEffect(
-            .degrees(roll.clamped(to: -0.6...0.6) * -18),
+            .degrees(reduceMotion ? 0 : min(max(roll,  -0.6), 0.6) * -18),
             axis: (x: 0, y: 1, z: 0),
             perspective: 0.4
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Monzo Business Card for CAKE EXPECTATIONS")
+    }
+
+    // MARK: - Holographic Foil Layers
+    // Extracted to keep body type-checkable. Two angular gradients at opposing
+    // centres simulate real foil colour interference.
+    @ViewBuilder var holoLayers: some View {
+        let colors1: [Color] = [
+            Color(hex: "#FF6B9D"), Color(hex: "#C44FFF"), Color(hex: "#4F8FFF"),
+            Color(hex: "#4FFFB0"), Color(hex: "#FFE94F"), Color(hex: "#FF9A4F"),
+            Color(hex: "#FF6B9D"),
+        ]
+        let colors2: [Color] = [
+            Color(hex: "#4FFFB0"), Color(hex: "#FFE94F"), Color(hex: "#FF6B9D"),
+            Color(hex: "#4F8FFF"), Color(hex: "#C44FFF"), Color(hex: "#4FFFB0"),
+        ]
+        let center2 = UnitPoint(x: 1 - holoCenter.x, y: 1 - holoCenter.y)
+
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(AngularGradient(colors: colors1, center: holoCenter))
+            .opacity(holoOpacity1)
+            .blendMode(.overlay)
+            .animation(.easeOut(duration: 0.2), value: isPressing)
+
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(AngularGradient(colors: colors2, center: center2))
+            .opacity(holoOpacity2)
+            .blendMode(.overlay)
+            .animation(.easeOut(duration: 0.2), value: isPressing)
     }
 
     // MARK: - Business Name (foil-stamped)
     // Positioned in absolute card space. The specular gradient moves with holoCenter
     // so tilting the card drags a bright streak across the letters.
     var businessName: some View {
+        let scale = cardWidth / 340
         let x = (cardWidth  * 0.08).rounded()
         let y = (cardHeight * 0.8025).rounded()
 
         return ZStack(alignment: .topLeading) {
-            // Specular text — gradient highlight sweeps with tilt
             Text("CAKE EXPECTATIONS")
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(.system(size: (12 * scale).rounded(), weight: .semibold, design: .monospaced))
                 .tracking(2.5)
                 .foregroundStyle(
                     LinearGradient(
                         colors: [
-                            .white.opacity(0.25),
-                            .white.opacity(0.78),
-                            .white.opacity(0.25),
+                            .white.opacity(0.65),
+                            .white.opacity(0.92),
+                            .white.opacity(0.65),
                         ],
                         startPoint: UnitPoint(x: holoCenter.x - 0.5, y: holoCenter.y - 0.3),
                         endPoint:   UnitPoint(x: holoCenter.x + 0.5, y: holoCenter.y + 0.3)
                     )
                 )
+                .shadow(color: .black.opacity(0.55), radius: 2, x: 0, y: 1)
                 .offset(x: x, y: y)
         }
         .frame(width: cardWidth, height: cardHeight, alignment: .topLeading)
@@ -183,6 +188,7 @@ struct BusinessCardView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(height: h * 0.13)
+                        .accessibilityHidden(true)
                 }
                 .frame(width: w - (w * 0.0328))
                 .offset(y: h * 0.0534)
@@ -193,6 +199,7 @@ struct BusinessCardView: View {
                     .scaledToFit()
                     .frame(width: w * 0.16, height: h * 0.185)
                     .offset(x: w * 0.102, y: (h - h * 0.185) / 2)
+                    .accessibilityHidden(true)
 
                 // Mastercard — Figma: inset(67.77% top, 3.28% right, 6.73% bottom, 75.84% left)
                 Image("card_mastercard")
@@ -203,6 +210,7 @@ struct BusinessCardView: View {
                         height: h - (h * 0.6777) - (h * 0.0673)
                     )
                     .offset(x: w * 0.7584, y: h * 0.6777)
+                    .accessibilityHidden(true)
 
             }
         }
