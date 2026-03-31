@@ -9,6 +9,7 @@ import SwiftUI
 struct CardAnimationView: View {
 
     @State private var motion = MotionManager()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Entry animation state
     @State private var cardOffsetY: CGFloat = -500
@@ -33,73 +34,86 @@ struct CardAnimationView: View {
     @State private var shadowOpacity: Double = 0.0
 
     var body: some View {
-        ZStack {
-            Color(.systemGroupedBackground).ignoresSafeArea()
+        GeometryReader { geo in
+            let cardWidth = min(340, geo.size.width - 48)
 
-            // MARK: — Context header
-            Text("Your business account is ready!")
-                .font(.system(size: 28, weight: .bold))
-                .foregroundColor(.primary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-                .opacity(textOpacity)
-                // 48pt below the card — card centre sits at -150, card half-height ~106pt
-                // so card bottom is at -44pt from screen centre; text sits 48pt below that
-                .offset(y: 48)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            ZStack {
+                Color(.systemGroupedBackground).ignoresSafeArea()
 
-            // MARK: — Card
-            BusinessCardView(
-                pitch: motion.pitch,
-                roll: motion.roll,
-                contentOpacity: contentOpacity,
-                isPressing: isPressed,
-                shimmerTrigger: shimmerTrigger
-            )
-            .scaleEffect(cardScale)
-            .scaleEffect(isPressed ? 0.97 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
-            .offset(x: floatOffsetX, y: cardOffsetY + floatOffsetY)
-            .shadow(
-                color: Color.black.opacity(shadowOpacity),
-                radius: 40,
-                x: 0,
-                y: shadowY
-            )
-            .offset(y: -150)
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        guard isSettled else { return }
-                        isPressed = true
-                    }
-                    .onEnded { _ in
-                        isPressed = false
-                    }
-            )
-
-            // MARK: — Bottom controls
-            HStack(spacing: 12) {
-                SoundTogglePill(soundEnabled: $soundEnabled)
-
-                Button {
-                    replay()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("Replay")
-                            .font(.system(size: 14, weight: .medium))
-                    }
+                // MARK: — Context header
+                Text("Your business account is ready!")
+                    .font(.title2.weight(.bold))
                     .foregroundColor(.primary)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(Capsule().fill(Color(.systemGray5)))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+                    .opacity(textOpacity)
+                    // 48pt below the card — card centre sits at -150, card half-height ~106pt
+                    // so card bottom is at -44pt from screen centre; text sits 48pt below that
+                    .offset(y: 48)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+
+                // MARK: — Card
+                BusinessCardView(
+                    pitch: motion.pitch,
+                    roll: motion.roll,
+                    contentOpacity: contentOpacity,
+                    isPressing: isPressed,
+                    shimmerTrigger: shimmerTrigger,
+                    cardWidth: cardWidth
+                )
+                .scaleEffect(cardScale)
+                .scaleEffect(isPressed ? 0.97 : 1.0)
+                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
+                .offset(x: floatOffsetX, y: cardOffsetY + floatOffsetY)
+                .shadow(
+                    color: Color.black.opacity(shadowOpacity),
+                    radius: 40,
+                    x: 0,
+                    y: shadowY
+                )
+                .offset(y: -150)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Monzo Business Card for CAKE EXPECTATIONS")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction {
+                    guard isSettled else { return }
+                    isPressed = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { isPressed = false }
                 }
-                .buttonStyle(PressScaleButtonStyle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            guard isSettled else { return }
+                            isPressed = true
+                        }
+                        .onEnded { _ in
+                            isPressed = false
+                        }
+                )
+
+                // MARK: — Bottom controls
+                HStack(spacing: 12) {
+                    SoundTogglePill(soundEnabled: $soundEnabled)
+
+                    Button {
+                        replay()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.subheadline.weight(.medium))
+                            Text("Replay")
+                                .font(.subheadline.weight(.medium))
+                        }
+                        .foregroundColor(.primary)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(Capsule().fill(Color(.systemGray5)))
+                    }
+                    .buttonStyle(PressScaleButtonStyle())
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, 72)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, 72)
         }
         .onAppear {
             motion.start()
@@ -121,9 +135,11 @@ struct CardAnimationView: View {
     //  0.60s  context text fades in
     //  1.00s  haptic fires as spring settles
     //  1.45s  idle float begins (vertical + horizontal drift at different periods)
+    //
+    //  reduceMotion: card fades in immediately, no drop, no float
     func runEntrance() {
-        cardOffsetY    = -500
-        cardScale      = 0.5
+        cardOffsetY    = reduceMotion ? 0 : -500
+        cardScale      = reduceMotion ? 1.0 : 0.5
         contentOpacity = 0
         textOpacity    = 0
         floatOffsetY   = 0
@@ -131,6 +147,18 @@ struct CardAnimationView: View {
         shadowY        = 12
         shadowOpacity  = 0.0
         isSettled      = false
+
+        if reduceMotion {
+            withAnimation(.easeOut(duration: 0.3)) {
+                contentOpacity = 1
+                textOpacity    = 1
+                shadowOpacity  = 0.45
+            }
+            isSettled = true
+            shimmerTrigger += 1
+            if soundEnabled { CardSoundEngine.shared.playLand() }
+            return
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
 
@@ -175,6 +203,7 @@ struct CardAnimationView: View {
     }
 
     func startFloat() {
+        guard !reduceMotion else { return }
         // Primary vertical float — 3.5s period
         withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true)) {
             floatOffsetY  = -4
