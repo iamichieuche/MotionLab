@@ -188,14 +188,15 @@ struct TaskRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(.tertiarySystemGroupedBackground))
-                .frame(width: 42, height: 42)
-                .overlay(
-                    Image(systemName: "doc.text")
-                        .foregroundColor(.secondary)
-                        .font(.system(size: 16))
-                )
+            Checkbox(isChecked: $isChecked, soundEnabled: soundEnabled)
+                .onChange(of: isChecked) { _, newValue in
+                    if newValue {
+                        if soundEnabled { FeedbackEngine.shared.scratchSound() }
+                    }
+                    withAnimation(newValue ? .spring(response: 0.35, dampingFraction: 0.7) : .easeOut(duration: 0.25)) {
+                        strikeProgress = newValue ? 1 : 0
+                    }
+                }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
@@ -231,15 +232,14 @@ struct TaskRow: View {
 
             Spacer()
 
-            Checkbox(isChecked: $isChecked, soundEnabled: soundEnabled)
-                .onChange(of: isChecked) { _, newValue in
-                    if newValue {
-                        if soundEnabled { FeedbackEngine.shared.scratchSound() }
-                    }
-                    withAnimation(newValue ? .spring(response: 0.35, dampingFraction: 0.7) : .easeOut(duration: 0.25)) {
-                        strikeProgress = newValue ? 1 : 0
-                    }
-                }
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(.tertiarySystemGroupedBackground))
+                .frame(width: 42, height: 42)
+                .overlay(
+                    Image(systemName: "doc.text")
+                        .foregroundColor(.secondary)
+                        .font(.system(size: 16))
+                )
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
