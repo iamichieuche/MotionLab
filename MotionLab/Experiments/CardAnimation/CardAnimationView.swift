@@ -117,10 +117,10 @@ struct CardAnimationView: View {
     //
     //  0.15s  card begins moving
     //  0.15s  shadow fades in
-    //  0.50s  card face reveals (logos, chip, name) — earlier than before, no blank window
-    //  0.50s  context text fades in
-    //  0.65s  haptic fires as spring settles
-    //  1.10s  idle float begins (vertical + horizontal drift at different periods)
+    //  0.60s  card face reveals (logos, chip, name)
+    //  0.60s  context text fades in
+    //  1.00s  haptic fires as spring settles
+    //  1.45s  idle float begins (vertical + horizontal drift at different periods)
     func runEntrance() {
         cardOffsetY    = -500
         cardScale      = 0.5
@@ -134,25 +134,25 @@ struct CardAnimationView: View {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
 
-            withAnimation(.spring(response: 0.9, dampingFraction: 0.78)) {
+            withAnimation(.spring(response: 1.0, dampingFraction: 0.82)) {
                 cardOffsetY = 0
                 cardScale   = 1.0
             }
 
-            withAnimation(.easeOut(duration: 0.6)) {
+            withAnimation(.easeOut(duration: 0.75)) {
                 shadowOpacity = 0.45
             }
 
             // Content and text reveal earlier — no more blank card window
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                withAnimation(.easeOut(duration: 0.4)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.40) {
+                withAnimation(.easeOut(duration: 0.45)) {
                     contentOpacity = 1
                     textOpacity    = 1
                 }
             }
 
             // Haptic + land sound as spring settles
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.72) {
                 let g = UIImpactFeedbackGenerator(style: .medium)
                 g.prepare()
                 g.impactOccurred()
