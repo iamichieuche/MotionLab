@@ -163,8 +163,11 @@ struct Checkbox: View {
                     )
                     .frame(width: 36, height: 36)
             }
+            .frame(width: 44, height: 44)
         }
         .buttonStyle(CheckboxPressStyle())
+        .accessibilityLabel(isChecked ? "Checked" : "Unchecked")
+        .accessibilityAddTraits(.isToggle)
     }
 }
 
@@ -217,7 +220,7 @@ struct TaskRow: View {
                             }
                             .trim(from: 0, to: strikeProgress)
                             .stroke(
-                                Color.black.opacity(0.35),
+                                Color.primary.opacity(0.35),
                                 style: StrokeStyle(lineWidth: 1.5, lineCap: .round)
                             )
                         }
@@ -239,6 +242,7 @@ struct TaskRow: View {
                     Image(systemName: "doc.text")
                         .foregroundColor(.secondary)
                         .font(.system(size: 16))
+                        .accessibilityHidden(true)
                 )
         }
         .padding(.horizontal, 20)
@@ -300,6 +304,9 @@ struct SoundTogglePill: View {
             )
         }
         .buttonStyle(PressScaleButtonStyle())
+        .accessibilityLabel("Sound")
+        .accessibilityValue(soundEnabled ? "On" : "Off")
+        .accessibilityAddTraits(.isToggle)
     }
 }
 
