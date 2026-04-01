@@ -6,12 +6,6 @@
 
 import SwiftUI
 
-// MARK: - State Machine
-
-enum CardExpansionState {
-    case pill, expanding, settled, floating
-}
-
 // MARK: - Root View
 
 struct CardAnimationView: View {
@@ -54,6 +48,13 @@ struct CardAnimationView: View {
     // Sound
     @State private var soundEnabled: Bool = true
 
+    // Replay icon rotation trigger
+    @State private var replayCount: Int = 0
+
+    // Haptic triggers — drives .sensoryFeedback() modifiers on the ZStack
+    @State private var landHapticTrigger:  Int = 0
+    @State private var lightHapticTrigger: Int = 0
+
     private var isSettled: Bool {
         expansionState == .settled || expansionState == .floating
     }
@@ -72,7 +73,7 @@ struct CardAnimationView: View {
                 // Context header — fades in with card content
                 Text("Your business account is ready!")
                     .font(.title.weight(.bold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
                     .opacity(textOpacity)
@@ -101,8 +102,8 @@ struct CardAnimationView: View {
                 // Entrance tilt — resolves 8° → 0° as the expansion spring settles
                 .rotation3DEffect(.degrees(entranceTilt), axis: (x: 1, y: 0, z: 0), perspective: 0.4)
                 // Press feedback — gated until settled
-                .scaleEffect(isPressed ? 0.97 : 1.0)
-                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
+                .scaleEffect(isPressed ? 0.96 : 1.0)
+                .animation(.spring(duration: 0.25, bounce: 0.2), value: isPressed)
                 .offset(x: floatOffsetX, y: cardOffsetY + floatOffsetY)
                 .shadow(
                     color: Color.black.opacity(shadowOpacity),
@@ -110,13 +111,18 @@ struct CardAnimationView: View {
                     x: 0,
                     y: shadowY
                 )
+                .sensoryFeedback(.impact(weight: .medium), trigger: landHapticTrigger)
+                .sensoryFeedback(.impact(weight: .light),  trigger: lightHapticTrigger)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Monzo Business Card for CAKE EXPECTATIONS")
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction {
                     guard isSettled else { return }
                     isPressed = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { isPressed = false }
+                    Task {
+                        try? await Task.sleep(for: .seconds(0.15))
+                        isPressed = false
+                    }
                 }
                 .gesture(
                     DragGesture(minimumDistance: 0)
@@ -135,10 +141,11 @@ struct CardAnimationView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.counterclockwise")
                                 .font(.subheadline.weight(.medium))
+                                .symbolEffect(.rotate, value: replayCount)
                             Text("Replay")
                                 .font(.subheadline.weight(.medium))
                         }
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 12)
                         .background(Capsule().fill(Color(.systemGray5)))
@@ -166,7 +173,7 @@ struct CardAnimationView: View {
     // MARK: - Entrance Sequence
     //
     //  0.00s  Dark navy pill at Dynamic Island position (126 × 37pt, cornerRadius 18)
-    //  0.15s  Pill expands to card dimensions — spring(response: 0.6, dampingFraction: 0.72)
+    //  0.15s  Pill expands to card dimensions — spring(duration: 0.6, bounce: 0.15)
     //         Concurrent: cornerRadius 18 → 16, cardOffsetY → -150, entranceTilt 8° → 0°
     //         Shadow fades in alongside the expansion
     //  0.63s  Card face reveals at 80% of spring (easeOut, 0.2s)
@@ -210,7 +217,7 @@ struct CardAnimationView: View {
 
         // Pill → card: all geometry + tilt driven by the same spring so everything
         // settles at exactly the same moment. 0.15s pause lets the pill register.
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.72).delay(0.15)) {
+        withAnimation(.spring(duration: 0.6, bounce: 0.15).delay(0.15)) {
             expansionState      = .expanding
             pillWidth           = finalCardWidth
             pillHeight          = finalCardHeight
@@ -225,31 +232,35 @@ struct CardAnimationView: View {
         }
 
         // Card face reveals at 80% of the spring (0.15 + 0.6 × 0.8 = 0.63s)
+        // Header text staggers 100ms after the card face — lets each element land before the next.
         withAnimation(.easeOut(duration: 0.2).delay(0.63)) {
             contentOpacity = 1
-            textOpacity    = 1
+        }
+        withAnimation(.easeOut(duration: 0.25).delay(0.73)) {
+            textOpacity = 1
         }
 
         // Haptic + shimmer trigger as the spring settles (0.15 + 0.6 = 0.75s)
-        // DispatchQueue is correct here: haptic and sound are side effects, not animations
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
-            let g = UIImpactFeedbackGenerator(style: .medium)
-            g.prepare()
-            g.impactOccurred()
+        Task {
+            try? await Task.sleep(for: .seconds(0.75))
+            landHapticTrigger += 1
             expansionState = .settled
             shimmerTrigger += 1
             if soundEnabled { CardSoundEngine.shared.playLand() }
         }
+
         // Shimmer sound rides the visual sweep (0.1s after haptic)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
+        Task {
+            try? await Task.sleep(for: .seconds(0.85))
             if soundEnabled { CardSoundEngine.shared.playShimmer() }
         }
 
-        // Idle float starts after shimmer completes (0.75 + 0.1 + 0.9 = 1.75s).
-        // Using DispatchQueue here (rather than .delay()) avoids a transaction conflict
-        // with the earlier shadowOpacity reveal — both target the same property and a
-        // delayed repeat-forever in the same render pass would override the reveal.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.75) {
+        // Idle float starts after shimmer completes (1.75s).
+        // Task.sleep avoids a transaction conflict with the earlier shadowOpacity reveal —
+        // both target the same property and a delayed repeat-forever in the same render
+        // pass would override the reveal.
+        Task {
+            try? await Task.sleep(for: .seconds(1.75))
             // Primary: vertical float with synced shadow grounding (3.5s period)
             withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true)) {
                 floatOffsetY  = -3
@@ -265,9 +276,8 @@ struct CardAnimationView: View {
     }
 
     func replay() {
-        let g = UIImpactFeedbackGenerator(style: .light)
-        g.prepare()
-        g.impactOccurred()
+        lightHapticTrigger += 1
+        replayCount += 1
 
         // Setting state without animation interrupts all pending repeat-forever loops,
         // snapping values back to their reset positions immediately.
@@ -286,7 +296,8 @@ struct CardAnimationView: View {
 
         // Brief pause lets the reset render before the entrance sequence begins,
         // so animations start from the correct presentation values
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        Task {
+            try? await Task.sleep(for: .milliseconds(50))
             runEntrance()
         }
     }
