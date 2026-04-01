@@ -55,6 +55,10 @@ struct CardAnimationView: View {
     @State private var landHapticTrigger:  Int = 0
     @State private var lightHapticTrigger: Int = 0
 
+    // Generation counter — incremented on each entrance so stale Tasks self-invalidate
+    // if replay() is called before the previous entrance has finished.
+    @State private var entranceGeneration: Int = 0
+
     private var isSettled: Bool {
         expansionState == .settled || expansionState == .floating
     }
@@ -184,6 +188,9 @@ struct CardAnimationView: View {
     //
     //  reduceMotion: card appears immediately at full size, no motion at all
     func runEntrance() {
+        entranceGeneration += 1
+        let gen = entranceGeneration
+
         // Snap to pill at Dynamic Island — breaks any running repeat-forever loops
         pillWidth           = 126
         pillHeight          = 37
@@ -243,6 +250,7 @@ struct CardAnimationView: View {
         // Haptic + shimmer trigger as the spring settles (0.15 + 0.6 = 0.75s)
         Task {
             try? await Task.sleep(for: .seconds(0.75))
+            guard gen == entranceGeneration else { return }
             landHapticTrigger += 1
             expansionState = .settled
             shimmerTrigger += 1
@@ -252,6 +260,7 @@ struct CardAnimationView: View {
         // Shimmer sound rides the visual sweep (0.1s after haptic)
         Task {
             try? await Task.sleep(for: .seconds(0.85))
+            guard gen == entranceGeneration else { return }
             if soundEnabled { CardSoundEngine.shared.playShimmer() }
         }
 
@@ -261,6 +270,7 @@ struct CardAnimationView: View {
         // pass would override the reveal.
         Task {
             try? await Task.sleep(for: .seconds(1.75))
+            guard gen == entranceGeneration else { return }
             // Primary: vertical float with synced shadow grounding (3.5s period)
             withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true)) {
                 floatOffsetY  = -3
