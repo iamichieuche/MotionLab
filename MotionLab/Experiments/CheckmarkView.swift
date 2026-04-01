@@ -164,7 +164,8 @@ struct Checkbox: View {
                     )
                     .frame(width: 36, height: 36)
             }
-            .frame(width: 44, height: 44)
+            .frame(width: 36, height: 36)
+            .contentShape(Rectangle().size(CGSize(width: 44, height: 44)))
         }
         .buttonStyle(CheckboxPressStyle())
         .accessibilityLabel(isChecked ? "Checked" : "Unchecked")
