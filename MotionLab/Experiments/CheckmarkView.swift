@@ -88,13 +88,10 @@ class FeedbackEngine {
 }
 
 // MARK: - Checkmark Shape
+// @Animatable replaces manual animatableData getter/setter boilerplate.
+@Animatable
 struct CheckmarkShape: Shape {
     var trimTo: CGFloat
-
-    var animatableData: CGFloat {
-        get { trimTo }
-        set { trimTo = newValue }
-    }
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -114,12 +111,10 @@ struct CheckmarkShape: Shape {
 // not just the completed tap. That physical responsiveness is what
 // makes it feel like a real button rather than a tappable element.
 struct CheckboxPressStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.85 : 1.0)
-            .animation(reduceMotion ? .none : .snappy(duration: 0.2), value: configuration.isPressed)
+            .animation(.spring(duration: 0.2, bounce: 0.2), value: configuration.isPressed)
     }
 }
 
@@ -145,7 +140,10 @@ struct Checkbox: View {
                 if soundEnabled { FeedbackEngine.shared.uncheckSound() }
             }
 
-            withAnimation(reduceMotion ? .none : (isChecked ? .bouncy(duration: 0.35) : .easeOut(duration: 0.25))) {
+            let animation: Animation? = isChecked
+                ? (reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.2))
+                : (reduceMotion ? nil : .easeOut(duration: 0.25))
+            withAnimation(animation) {
                 trimTo = isChecked ? 1 : 0
             }
         } label: {
@@ -180,13 +178,13 @@ struct TaskRow: View {
     let subtitle: String
     @Binding var isChecked: Bool
     var soundEnabled: Bool = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Controls how much of the strikethrough line is drawn.
     // 0 = invisible, 1 = fully across the text.
     // This mirrors exactly the same trim technique used on the checkmark —
     // the same concept, applied to a different shape.
     @State private var strikeProgress: CGFloat = 0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // The scratch sound clip is 2 seconds long, so we match the
     // animation duration to 2 seconds — the line draws at the same
@@ -200,7 +198,10 @@ struct TaskRow: View {
                     if newValue {
                         if soundEnabled { FeedbackEngine.shared.scratchSound() }
                     }
-                    withAnimation(reduceMotion ? .none : (newValue ? .bouncy(duration: 0.35) : .easeOut(duration: 0.25))) {
+                    let animation: Animation? = newValue
+                        ? (reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.2))
+                        : (reduceMotion ? nil : .easeOut(duration: 0.25))
+                    withAnimation(animation) {
                         strikeProgress = newValue ? 1 : 0
                     }
                 }
@@ -209,17 +210,15 @@ struct TaskRow: View {
                 Text(title)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.primary)
+                    .opacity(isChecked ? 0.5 : 1)
                     .strikethrough(strikeProgress > 0.5, color: Color.primary.opacity(0.35))
-                    .animation(reduceMotion ? .none : .snappy(duration: 0.35)) { content in
-                        content.opacity(isChecked ? 0.5 : 1)
-                    }
+                    .animation(.spring(duration: 0.35, bounce: 0.2), value: isChecked)
 
                 Text(subtitle)
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
-                    .animation(reduceMotion ? .none : .snappy(duration: 0.35)) { content in
-                        content.opacity(isChecked ? 0.35 : 1)
-                    }
+                    .opacity(isChecked ? 0.35 : 1)
+                    .animation(.spring(duration: 0.35, bounce: 0.2), value: isChecked)
             }
 
             Spacer()
@@ -246,10 +245,11 @@ struct TaskRow: View {
 // MARK: - Sound Toggle Pill
 struct SoundTogglePill: View {
     @Binding var soundEnabled: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button {
-            withAnimation(.snappy(duration: 0.3)) {
+            withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
                 soundEnabled.toggle()
             }
             let g = UIImpactFeedbackGenerator(style: .light)
@@ -257,17 +257,24 @@ struct SoundTogglePill: View {
             g.impactOccurred()
         } label: {
             HStack(spacing: 8) {
+
+                // contentTransition animates the icon swap as a symbol replace effect —
+                // cleaner than a manual ZStack crossfade and uses the system's own
+                // SF Symbol animation path.
                 Image(systemName: soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
                     .contentTransition(.symbolEffect(.replace.downUp))
                     .font(.system(size: 14, weight: .medium))
                     .frame(width: 18, height: 18)
+                    .animation(.smooth(duration: 0.3), value: soundEnabled)
 
+                // Fixed width prevents the pill from resizing between "Sound on" and "Sound off".
+                // Without this, the different text lengths cause the capsule to jump size on toggle.
                 Text(soundEnabled ? "Sound on" : "Sound off")
                     .font(.system(size: 14, weight: .medium))
                     .frame(width: 72, alignment: .leading)
             }
             .foregroundColor(soundEnabled ? .primary : .secondary)
-            .animation(.snappy(duration: 0.3), value: soundEnabled)
+            .animation(.smooth(duration: 0.3), value: soundEnabled)
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(
