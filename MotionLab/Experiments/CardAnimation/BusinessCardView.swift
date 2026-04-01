@@ -81,7 +81,7 @@ struct BusinessCardView: View {
                     .blendMode(.overlay)
                     .onChange(of: shimmerTrigger) { _, _ in
                         shimmerX = -(cardWidth + 200)
-                        withAnimation(.linear(duration: 1.2)) {
+                        withAnimation(.easeInOut(duration: 0.9)) {
                             shimmerX = cardWidth + 200
                         }
                     }

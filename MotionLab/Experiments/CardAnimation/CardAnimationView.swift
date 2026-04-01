@@ -6,72 +6,110 @@
 
 import SwiftUI
 
+// MARK: - State Machine
+
+enum CardExpansionState {
+    case pill, expanding, settled, floating
+}
+
+// MARK: - Root View
+
 struct CardAnimationView: View {
 
     @State private var motion = MotionManager()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // Entry animation state
-    @State private var cardOffsetY: CGFloat = -500
-    @State private var cardScale: CGFloat = 0.5
+    // Geometry — captured once from GeometryReader on appear
+    @State private var finalCardWidth:  CGFloat = 340
+    @State private var finalCardHeight: CGFloat = 213
+    @State private var diOffsetY:       CGFloat = -400  // Dynamic Island Y from screen centre
+    @State private var targetOffsetY:   CGFloat = -150  // resting card Y from screen centre
+
+    // Expansion state machine
+    @State private var expansionState: CardExpansionState = .pill
+
+    // Pill → card morph
+    @State private var pillWidth:           CGFloat = 126
+    @State private var pillHeight:          CGFloat = 37
+    @State private var currentCornerRadius: CGFloat = 18
+    @State private var cardOffsetY:         CGFloat = -400
+
+    // Entrance tilt — X axis, 8° → 0°, concurrent with expansion
+    @State private var entranceTilt: Double = 8
+
+    // Card content
     @State private var contentOpacity: Double = 0
-    @State private var textOpacity: Double = 0
+    @State private var textOpacity:    Double = 0
+    @State private var shimmerTrigger: Int    = 0
 
-    // Press interaction
+    // Post-settle float + synced shadow
+    @State private var floatOffsetY:  CGFloat = 0
+    @State private var floatOffsetX:  CGFloat = 0
+    @State private var shadowY:       CGFloat = 16
+    @State private var shadowOpacity: Double  = 0.0
+
+    // Press interaction (gated until card settles)
     @State private var isPressed: Bool = false
-    @State private var isSettled: Bool = false  // gates press until card has landed
-
-    // Shimmer — increments each entrance so onChange always fires
-    @State private var shimmerTrigger: Int = 0
 
     // Sound
     @State private var soundEnabled: Bool = true
 
-    // Post-entry effects
-    @State private var floatOffsetY: CGFloat = 0
-    @State private var floatOffsetX: CGFloat = 0  // secondary drift — different period
-    @State private var shadowY: CGFloat = 12
-    @State private var shadowOpacity: Double = 0.0
+    private var isSettled: Bool {
+        expansionState == .settled || expansionState == .floating
+    }
 
     var body: some View {
         GeometryReader { geo in
-            let cardWidth = min(340, geo.size.width - 48)
+            let cardWidth  = min(340, geo.size.width - 48)
+            let cardHeight = (cardWidth / 340) * 213
+            // Dynamic Island centre sits ~20pt below the top of the geometry frame
+            let diY        = -(geo.size.height / 2 - 20)
+            let centerY: CGFloat = -150
 
             ZStack {
                 Color(.systemGroupedBackground).ignoresSafeArea()
 
-                // MARK: — Context header
+                // Context header — fades in with card content
                 Text("Your business account is ready!")
                     .font(.title.weight(.bold))
                     .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
                     .opacity(textOpacity)
-                    // 48pt below the card — card centre sits at -150, card half-height ~106pt
-                    // so card bottom is at -44pt from screen centre; text sits 48pt below that
                     .offset(y: 48)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
 
-                // MARK: — Card
-                BusinessCardView(
-                    pitch: motion.pitch,
-                    roll: motion.roll,
-                    contentOpacity: contentOpacity,
-                    isPressing: isPressed,
-                    shimmerTrigger: shimmerTrigger,
-                    cardWidth: cardWidth
-                )
-                .scaleEffect(cardScale)
+                // MARK: — Pill → card
+
+                ZStack {
+                    // Navy base: the pill that exhales into the card frame
+                    RoundedRectangle(cornerRadius: currentCornerRadius)
+                        .fill(Color(hex: "#1A1F36"))
+
+                    // Card face: clipped to the pill during expansion, revealed at 80%
+                    BusinessCardView(
+                        pitch: motion.pitch,
+                        roll: motion.roll,
+                        contentOpacity: contentOpacity,
+                        isPressing: isPressed,
+                        shimmerTrigger: shimmerTrigger,
+                        cardWidth: finalCardWidth
+                    )
+                }
+                .frame(width: pillWidth, height: pillHeight)
+                .clipShape(RoundedRectangle(cornerRadius: currentCornerRadius))
+                // Entrance tilt — resolves 8° → 0° as the expansion spring settles
+                .rotation3DEffect(.degrees(entranceTilt), axis: (x: 1, y: 0, z: 0), perspective: 0.4)
+                // Press feedback — gated until settled
                 .scaleEffect(isPressed ? 0.97 : 1.0)
                 .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
                 .offset(x: floatOffsetX, y: cardOffsetY + floatOffsetY)
                 .shadow(
                     color: Color.black.opacity(shadowOpacity),
-                    radius: 40,
+                    radius: 24,
                     x: 0,
                     y: shadowY
                 )
-                .offset(y: -150)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Monzo Business Card for CAKE EXPECTATIONS")
                 .accessibilityAddTraits(.isButton)
@@ -86,18 +124,14 @@ struct CardAnimationView: View {
                             guard isSettled else { return }
                             isPressed = true
                         }
-                        .onEnded { _ in
-                            isPressed = false
-                        }
+                        .onEnded { _ in isPressed = false }
                 )
 
                 // MARK: — Bottom controls
                 HStack(spacing: 12) {
                     SoundTogglePill(soundEnabled: $soundEnabled)
 
-                    Button {
-                        replay()
-                    } label: {
+                    Button { replay() } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.counterclockwise")
                                 .font(.subheadline.weight(.medium))
@@ -114,105 +148,119 @@ struct CardAnimationView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, 72)
             }
-        }
-        .onAppear {
-            motion.start()
-            runEntrance()
-        }
-        .onDisappear {
-            motion.stop()
+            .onAppear {
+                finalCardWidth  = cardWidth
+                finalCardHeight = cardHeight
+                diOffsetY       = diY
+                targetOffsetY   = centerY
+                cardOffsetY     = diY
+                motion.start()
+                runEntrance()
+            }
+            .onDisappear {
+                motion.stop()
+            }
         }
     }
 
     // MARK: - Entrance Sequence
     //
-    // Card slides in from above, growing from 0.5 → 1.0 as it descends —
-    // like a card being handed to you across a desk, approaching and landing.
+    //  0.00s  Dark navy pill at Dynamic Island position (126 × 37pt, cornerRadius 18)
+    //  0.15s  Pill expands to card dimensions — spring(response: 0.6, dampingFraction: 0.72)
+    //         Concurrent: cornerRadius 18 → 16, cardOffsetY → -150, entranceTilt 8° → 0°
+    //         Shadow fades in alongside the expansion
+    //  0.63s  Card face reveals at 80% of spring (easeOut, 0.2s)
+    //  0.75s  Spring settles — .medium haptic, shimmer triggered
+    //  0.85s  Shimmer sound fires with the visual sweep
+    //  1.75s  Idle float begins — ±3pt Y over 3.5s, ±2pt X over 4.7s
+    //         Shadow Y (16 → 19) and opacity (0.3 → 0.22) sync with the float
     //
-    //  0.15s  card begins moving
-    //  0.15s  shadow fades in
-    //  0.60s  card face reveals (logos, chip, name)
-    //  0.60s  context text fades in
-    //  1.00s  haptic fires as spring settles
-    //  1.45s  idle float begins (vertical + horizontal drift at different periods)
-    //
-    //  reduceMotion: card fades in immediately, no drop, no float
+    //  reduceMotion: card appears immediately at full size, no motion at all
     func runEntrance() {
-        cardOffsetY    = reduceMotion ? 0 : -500
-        cardScale      = reduceMotion ? 1.0 : 0.5
-        contentOpacity = 0
-        textOpacity    = 0
-        floatOffsetY   = 0
-        floatOffsetX   = 0
-        shadowY        = 12
-        shadowOpacity  = 0.0
-        isSettled      = false
+        // Snap to pill at Dynamic Island — breaks any running repeat-forever loops
+        pillWidth           = 126
+        pillHeight          = 37
+        currentCornerRadius = 18
+        cardOffsetY         = diOffsetY
+        entranceTilt        = 8
+        contentOpacity      = 0
+        textOpacity         = 0
+        floatOffsetY        = 0
+        floatOffsetX        = 0
+        shadowY             = 16
+        shadowOpacity       = 0.0
+        expansionState      = .pill
 
         if reduceMotion {
+            pillWidth           = finalCardWidth
+            pillHeight          = finalCardHeight
+            currentCornerRadius = 16
+            cardOffsetY         = targetOffsetY
+            entranceTilt        = 0
             withAnimation(.easeOut(duration: 0.3)) {
                 contentOpacity = 1
                 textOpacity    = 1
-                shadowOpacity  = 0.45
+                shadowOpacity  = 0.3
             }
-            isSettled = true
+            expansionState = .settled
             shimmerTrigger += 1
             if soundEnabled { CardSoundEngine.shared.playLand() }
             return
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-
-            withAnimation(.spring(response: 1.0, dampingFraction: 0.82)) {
-                cardOffsetY = 0
-                cardScale   = 1.0
-            }
-
-            withAnimation(.easeOut(duration: 0.75)) {
-                shadowOpacity = 0.45
-            }
-
-            // Content and text reveal earlier — no more blank card window
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.40) {
-                withAnimation(.easeOut(duration: 0.45)) {
-                    contentOpacity = 1
-                    textOpacity    = 1
-                }
-            }
-
-            // Haptic + land sound as spring settles
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.72) {
-                let g = UIImpactFeedbackGenerator(style: .medium)
-                g.prepare()
-                g.impactOccurred()
-                if soundEnabled { CardSoundEngine.shared.playLand() }
-
-                shimmerTrigger += 1
-                isSettled = true
-
-                // Shimmer sound fires with the visual sweep
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    if soundEnabled { CardSoundEngine.shared.playShimmer() }
-                }
-
-                // Float begins — two independent oscillations so motion never feels mechanical
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                    startFloat()
-                }
-            }
+        // Pill → card: all geometry + tilt driven by the same spring so everything
+        // settles at exactly the same moment. 0.15s pause lets the pill register.
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.72).delay(0.15)) {
+            expansionState      = .expanding
+            pillWidth           = finalCardWidth
+            pillHeight          = finalCardHeight
+            currentCornerRadius = 16
+            cardOffsetY         = targetOffsetY
+            entranceTilt        = 0
         }
-    }
 
-    func startFloat() {
-        guard !reduceMotion else { return }
-        // Primary vertical float — 3.5s period
-        withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true)) {
-            floatOffsetY  = -4
-            shadowY       = 18
-            shadowOpacity = 0.32
+        // Shadow arrives with the card — same delay, slightly longer ease
+        withAnimation(.easeOut(duration: 0.45).delay(0.15)) {
+            shadowOpacity = 0.3
         }
-        // Secondary horizontal drift — 4.7s period, never in perfect sync with vertical
-        withAnimation(.easeInOut(duration: 4.7).repeatForever(autoreverses: true)) {
-            floatOffsetX = 2
+
+        // Card face reveals at 80% of the spring (0.15 + 0.6 × 0.8 = 0.63s)
+        withAnimation(.easeOut(duration: 0.2).delay(0.63)) {
+            contentOpacity = 1
+            textOpacity    = 1
+        }
+
+        // Haptic + shimmer trigger as the spring settles (0.15 + 0.6 = 0.75s)
+        // DispatchQueue is correct here: haptic and sound are side effects, not animations
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            let g = UIImpactFeedbackGenerator(style: .medium)
+            g.prepare()
+            g.impactOccurred()
+            expansionState = .settled
+            shimmerTrigger += 1
+            if soundEnabled { CardSoundEngine.shared.playLand() }
+        }
+        // Shimmer sound rides the visual sweep (0.1s after haptic)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
+            if soundEnabled { CardSoundEngine.shared.playShimmer() }
+        }
+
+        // Idle float starts after shimmer completes (0.75 + 0.1 + 0.9 = 1.75s).
+        // Using DispatchQueue here (rather than .delay()) avoids a transaction conflict
+        // with the earlier shadowOpacity reveal — both target the same property and a
+        // delayed repeat-forever in the same render pass would override the reveal.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.75) {
+            // Primary: vertical float with synced shadow grounding (3.5s period)
+            withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true)) {
+                floatOffsetY  = -3
+                shadowY       = 19
+                shadowOpacity = 0.22
+            }
+            // Secondary: horizontal drift at a different period — prevents mechanical feel
+            withAnimation(.easeInOut(duration: 4.7).repeatForever(autoreverses: true)) {
+                floatOffsetX = 2
+            }
+            expansionState = .floating
         }
     }
 
@@ -221,12 +269,23 @@ struct CardAnimationView: View {
         g.prepare()
         g.impactOccurred()
 
-        isSettled    = false
-        floatOffsetY = 0
-        floatOffsetX  = 0
-        shadowY       = 12
-        shadowOpacity = 0.0
+        // Setting state without animation interrupts all pending repeat-forever loops,
+        // snapping values back to their reset positions immediately.
+        expansionState      = .pill
+        pillWidth           = 126
+        pillHeight          = 37
+        currentCornerRadius = 18
+        cardOffsetY         = diOffsetY
+        entranceTilt        = 8
+        contentOpacity      = 0
+        textOpacity         = 0
+        floatOffsetY        = 0
+        floatOffsetX        = 0
+        shadowY             = 16
+        shadowOpacity       = 0.0
 
+        // Brief pause lets the reset render before the entrance sequence begins,
+        // so animations start from the correct presentation values
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             runEntrance()
         }
