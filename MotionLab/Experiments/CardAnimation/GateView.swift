@@ -37,7 +37,6 @@ struct GateView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .padding(.bottom, 48)
         }
-        .navigationBarHidden(true)
     }
 }
 

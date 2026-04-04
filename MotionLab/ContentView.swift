@@ -26,6 +26,12 @@ let experiments: [Experiment] = [
         subtitle: "Your card revealed with weight and presence. Holographic foil driven by real device tilt.",
         view: AnyView(GateView())
     ),
+    Experiment(
+        number: "03",
+        title: "Onboarding Flow",
+        subtitle: "Account ready → card celebration → add money. A full three-screen onboarding sequence.",
+        view: AnyView(OnboardingGateView())
+    ),
 ]
 
 struct ContentView: View {
