@@ -24,7 +24,7 @@ let experiments: [Experiment] = [
         number: "02",
         title: "Business Card",
         subtitle: "Your card revealed with weight and presence. Holographic foil driven by real device tilt.",
-        view: AnyView(CardAnimationView())
+        view: AnyView(GateView())
     ),
 ]
 
