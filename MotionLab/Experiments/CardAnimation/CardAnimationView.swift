@@ -45,6 +45,10 @@ struct CardAnimationView: View {
     // Generation counter — stale Tasks self-invalidate on rapid replay
     @State private var entranceGeneration: Int = 0
 
+    // Headline variant toggle — A: sharp cut, B: blur-to-sharp reveal
+    @State private var headlineVariantB: Bool  = false
+    @State private var headlineBlur:     CGFloat = 12
+
     var body: some View {
         GeometryReader { geo in
             let cardWidth = min(340, geo.size.width - 48)
@@ -59,7 +63,8 @@ struct CardAnimationView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
                     .opacity(textOpacity)
-                    .offset(y: 48)
+                    .blur(radius: headlineVariantB ? headlineBlur : 0)
+                    .offset(y: -14)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
 
                 // MARK: — Card
@@ -74,7 +79,7 @@ struct CardAnimationView: View {
                 .scaleEffect(cardScale)
                 .scaleEffect(isPressed ? 0.97 : 1.0)
                 .animation(.spring(duration: 0.25, bounce: 0.2), value: isPressed)
-                .offset(x: floatOffsetX, y: cardOffsetY + floatOffsetY - 150)
+                .offset(x: floatOffsetX, y: cardOffsetY + floatOffsetY - 200)
                 .shadow(
                     color: Color.black.opacity(shadowOpacity),
                     radius: 40,
@@ -104,27 +109,50 @@ struct CardAnimationView: View {
                 )
 
                 // MARK: — Bottom controls
-                HStack(spacing: 12) {
-                    SoundTogglePill(soundEnabled: $soundEnabled)
+                VStack(spacing: 32) {
+                    HStack(spacing: 12) {
+                        SoundTogglePill(soundEnabled: $soundEnabled)
 
-                    Button { replay() } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "arrow.counterclockwise")
-                                .font(.system(size: 14, weight: .medium))
-                                .symbolEffect(.bounce, value: replayCount)
-                                .frame(width: 18, height: 18)
-                            Text("Replay")
-                                .font(.system(size: 14, weight: .medium))
+                        Button { replay() } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .symbolEffect(.bounce, value: replayCount)
+                                    .frame(width: 18, height: 18)
+                                Text("Replay")
+                                    .font(.system(size: 14, weight: .medium))
+                            }
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(Capsule().fill(Color(.systemGray5)))
                         }
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(Capsule().fill(Color(.systemGray5)))
+                        .buttonStyle(PressScaleButtonStyle())
+                    }
+
+                    Button {
+                        headlineVariantB.toggle()
+                        isSettled     = false
+                        floatOffsetY  = 0
+                        floatOffsetX  = 0
+                        shadowY       = 12
+                        shadowOpacity = 0.0
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(50))
+                            runEntrance()
+                        }
+                    } label: {
+                        Text(headlineVariantB ? "Variant B" : "Variant A")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(Capsule().fill(Color(.systemGray6)))
                     }
                     .buttonStyle(PressScaleButtonStyle())
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .padding(.bottom, 72)
+                .padding(.bottom, 40)
             }
             .onAppear {
                 motion.start()
@@ -141,15 +169,15 @@ struct CardAnimationView: View {
     //  Card drops from above, growing 0.5 → 1.0 as it descends —
     //  like a card being handed to you across a desk.
     //
+    //  0.00s  headline appears (A: sharp cut / B: blur-to-sharp)
     //  0.15s  spring drop begins (duration 1.0, bounce 0.1)
     //  0.15s  shadow fades in alongside
     //  0.55s  card face reveals (logos, chip, name)
-    //  0.65s  header text staggers in 100ms after card face
     //  0.87s  spring settles — medium haptic + shimmer + land sound
     //  0.97s  shimmer sound rides the visual sweep
     //  1.32s  idle float begins (±4pt Y / 3.5s, ±2pt X / 4.7s)
     //
-    //  reduceMotion: card fades in immediately, no drop, no float
+    //  reduceMotion: headline and card fade in immediately, no drop, no float
     func runEntrance() {
         entranceGeneration += 1
         let gen = entranceGeneration
@@ -158,6 +186,7 @@ struct CardAnimationView: View {
         cardScale      = reduceMotion ? 1.0 : 0.5
         contentOpacity = 0
         textOpacity    = 0
+        headlineBlur   = 12
         floatOffsetY   = 0
         floatOffsetX   = 0
         shadowY        = 12
@@ -165,15 +194,28 @@ struct CardAnimationView: View {
         isSettled      = false
 
         if reduceMotion {
+            textOpacity  = 1
+            headlineBlur = 0
             withAnimation(.easeOut(duration: 0.3)) {
                 contentOpacity = 1
-                textOpacity    = 1
                 shadowOpacity  = 0.45
             }
             isSettled = true
             shimmerTrigger += 1
             if soundEnabled { CardSoundEngine.shared.playLand() }
             return
+        }
+
+        // Headline appears first — one frame after reset so the opacity-0 renders
+        Task {
+            try? await Task.sleep(for: .milliseconds(16))
+            guard gen == entranceGeneration else { return }
+            if headlineVariantB {
+                withAnimation(.easeOut(duration: 0.6)) { textOpacity = 1 }
+                withAnimation(.easeOut(duration: 0.9)) { headlineBlur = 0 }
+            } else {
+                textOpacity = 1
+            }
         }
 
         Task {
@@ -195,15 +237,6 @@ struct CardAnimationView: View {
             guard gen == entranceGeneration else { return }
             withAnimation(.easeOut(duration: 0.35)) {
                 contentOpacity = 1
-            }
-        }
-
-        // Header text staggers 100ms after the card face
-        Task {
-            try? await Task.sleep(for: .milliseconds(650))
-            guard gen == entranceGeneration else { return }
-            withAnimation(.easeOut(duration: 0.35)) {
-                textOpacity = 1
             }
         }
 
