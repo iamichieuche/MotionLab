@@ -20,15 +20,23 @@ extension Color {
         light: Color(hex: "#F2F8F3"),
         dark:  Color(hex: "#091723")
     )
-    // Light: white   Dark: navy800 (#2C3A43)
+    // Non-conflicting alias for use in view bodies.
+    // `Color.background` clashes with SwiftUI's ShapeStyle.background protocol member
+    // (which requires Self == BackgroundStyle), causing a compiler error when used
+    // directly in views. `Color.page` is identical but unambiguous.
+    static let page = Color(
+        light: Color(hex: "#F2F8F3"),
+        dark:  Color(hex: "#091723")
+    )
+    // Light: white   Dark: section/card surface — one step lighter than page (#162535)
     static let backgroundSecondary = Color(
         light: .white,
-        dark:  Color(hex: "#2C3A43")
+        dark:  Color(hex: "#162535")
     )
-    // Light: same as background   Dark: navy700 (#112231)
+    // Light: same as background   Dark: nested card surface — one step lighter than section (#1E2D3C)
     static let backgroundTertiary = Color(
         light: Color(hex: "#F2F8F3"),
-        dark:  Color(hex: "#112231")
+        dark:  Color(hex: "#1E2D3C")
     )
     // 10% navy600 in both modes — used for selected/pressed states
     static let backgroundSelected = Color(hex: "#3B4C54").opacity(0.1)

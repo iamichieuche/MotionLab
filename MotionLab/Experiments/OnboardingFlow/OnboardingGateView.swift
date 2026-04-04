@@ -2,51 +2,69 @@
 //  OnboardingGateView.swift
 //  MotionLab
 //
-//  Experiment 03 — Onboarding Flow
+//  Experiment 03 — Onboarding Flow, Screen 1
 //
-//  Entry point. Simulates a user arriving after completing their application,
-//  so the card celebration that follows lands in the right emotional context.
+//  Simulates the moment a user arrives after submitting their application.
+//  In production this state is driven by the backend; here we let the user
+//  advance manually so the card celebration lands with the right context.
 
 import SwiftUI
+import Lottie
 
 struct OnboardingGateView: View {
     @State private var navigate = false
 
     var body: some View {
-        ZStack {
-            Color(hex: "#F2F8F3").ignoresSafeArea()
+        ZStack(alignment: .bottom) {
+            Color.page.ignoresSafeArea()
 
-            VStack(spacing: 12) {
-                Text("You're nearly there.")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(Color.content)
+            // Content — vertically centered in the space above the button
+            VStack(spacing: 0) {
+                Spacer(minLength: 0).frame(maxHeight: 60)
 
-                Text("Tap below to complete your application.")
-                    .font(.system(size: 17))
-                    .foregroundStyle(Color.contentSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
+                // Drumroll Lottie animation.
+                //
+                // The source canvas is 720×480 (landscape), so we constrain the
+                // width and let the height follow the aspect ratio (~0.667).
+                // contentMode: .scaleAspectFit ensures the animation never crops.
+                LottieView(animation: .named("Drumroll_720x480_8sec_02"))
+                    .playing(loopMode: .loop)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 213)
+
+                Spacer().frame(height: 40)
+
+                VStack(spacing: 14) {
+                    Text("We're processing\nyour application.")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(Color.content)
+                        .multilineTextAlignment(.center)
+
+                    Text("Tap below to continue.")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(Color.contentSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 32)
+
+                Spacer(minLength: 0)
             }
+            // Padding clears the docked button height (52pt) + its 32pt inset + breathing room
+            .padding(.bottom, 96)
 
+            // Button — docked at 32pt from screen bottom, consistent across all screens
             Button("Complete application") {
                 navigate = true
             }
             .font(.system(size: 17, weight: .semibold))
-            .foregroundColor(Color.contentOnFill)
+            .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Capsule().fill(Color.content))
+            .background(Capsule().fill(Color(hex: "#218FB7")))
             .padding(.horizontal, 24)
             .buttonStyle(PressScaleButtonStyle())
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, 48)
+            .padding(.bottom, 32)
         }
-        .navigationBarHidden(true)
-        // navigationDestination is the modern SwiftUI way to push a view.
-        // Unlike the old NavigationLink(destination:isActive:), it keeps the
-        // trigger (@State bool) and the destination (the view) separate —
-        // making it easier to trigger navigation from anywhere in your code,
-        // not just from inside a NavigationLink wrapper.
         .navigationDestination(isPresented: $navigate) {
             OnboardingCardView()
         }

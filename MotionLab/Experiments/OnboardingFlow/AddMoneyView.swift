@@ -8,38 +8,38 @@
 //  Background, chips, typography, and footer layout all match the design.
 //
 //  Coin stack replaces the Figma illustration — real asset coming later.
-//  SF Symbol placeholder: sterlingsign.circle.fill, stacked with spring physics.
+//  SF Symbol placeholder: sterlingsign, coins stacked horizontally with spring physics.
 
 import SwiftUI
 
 // MARK: - Chip Model
 
 enum MoneyChip: String, CaseIterable, Identifiable {
-    case five    = "£5"
-    case twenty  = "£20"
-    case fifty   = "£50"
-    case hundred = "£100"
-    case other   = "Other"
+    case hundred     = "£100"
+    case twoFifty    = "£250"
+    case fiveHundred = "£500"
+    case oneThousand = "£1,000"
+    case other       = "Other"
 
     var id: String { rawValue }
 
     var coinCount: Int {
         switch self {
-        case .five:    return 1
-        case .twenty:  return 2
-        case .fifty:   return 3
-        case .hundred: return 5
-        case .other:   return 0
+        case .hundred:      return 1
+        case .twoFifty:     return 2
+        case .fiveHundred:  return 3
+        case .oneThousand:  return 5
+        case .other:        return 0
         }
     }
 
     var displayAmount: String {
         switch self {
-        case .five:    return "5"
-        case .twenty:  return "20"
-        case .fifty:   return "50"
-        case .hundred: return "100"
-        case .other:   return "0"
+        case .hundred:      return "100"
+        case .twoFifty:     return "250"
+        case .fiveHundred:  return "500"
+        case .oneThousand:  return "1,000"
+        case .other:        return ""
         }
     }
 }
@@ -49,113 +49,135 @@ enum MoneyChip: String, CaseIterable, Identifiable {
 struct AddMoneyView: View {
     @Environment(\.dismiss) private var dismiss
 
-    @State private var selectedChip: MoneyChip = .twenty
+    @State private var selectedChip: MoneyChip = .twoFifty
+    @State private var coins: [UUID] = [UUID(), UUID()]   // £250 = 2 coins
+    @State private var amountText: String = "250"
 
-    // Stable UUID array — each UUID represents one coin in the stack.
-    // Using UUIDs (rather than ForEach(0..<count)) gives SwiftUI a stable
-    // identity for each coin so it can animate insertions and removals
-    // independently, rather than just re-rendering the whole stack.
-    @State private var coins: [UUID] = [UUID(), UUID()]   // £20 = 2 coins by default
+    // FocusState drives the keyboard — setting true opens it, false dismisses it.
+    @FocusState private var amountFocused: Bool
 
-    // Incrementing this Int triggers .sensoryFeedback on each chip tap.
-    // Declarative haptics: the modifier fires whenever the value changes,
-    // so you never need to call UIImpactFeedbackGenerator imperatively.
-    @State private var hapticTrigger: Int = 0
+    @State private var hapticTrigger:  Int = 0
+    @State private var coinGeneration: Int = 0
+
+    // Payment method — drives the payment row and footer button
+    @State private var selectedPaymentMethod: PaymentMethod = .applePay
+
+    // Navigation / presentation
+    @State private var showPaymentSheet:        Bool = false
+    @State private var navigateToSuccess:       Bool = false
+    @State private var showChangePaymentSheet:  Bool = false
+
+    // MARK: - Body
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Color(hex: "#F2F8F3").ignoresSafeArea()
-
-            // Scrollable content with bottom padding to clear the footer
+        ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
                     coinStack
+                        .id("top")
                     headerText
                     paymentField
-                    applePayRow
-                    Spacer(minLength: 200)
+                        .id("payment")
+                    paymentMethodRow
+                    Spacer(minLength: 120)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 24)
             }
-
-            footer
+            .background(Color.page.ignoresSafeArea())
+            // safeAreaInset docks the footer AND participates in keyboard avoidance —
+            // it rides up with the keyboard, ScrollView shrinks to fill the remaining space.
+            .safeAreaInset(edge: .bottom) { footer }
+            .onChange(of: amountFocused) { _, focused in
+                if focused {
+                    withAnimation(.spring(duration: 0.4, bounce: 0.1)) {
+                        proxy.scrollTo("payment", anchor: .top)
+                    }
+                } else {
+                    // Delay scroll-back so the keyboard dismissal animation starts first —
+                    // two things snapping at once felt abrupt.
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(200))
+                        withAnimation(.spring(duration: 0.4, bounce: 0.1)) {
+                            proxy.scrollTo("top", anchor: .top)
+                        }
+                    }
+                }
+            }
+            // Reformat amountText as the user types, inserting thousand separators.
+            // guard amountFocused prevents reformatting when preset chips set the value.
+            .onChange(of: amountText) { _, newValue in
+                guard amountFocused else { return }
+                let digits = newValue.filter { $0.isNumber }
+                guard !digits.isEmpty else { return }
+                if let number = Int(digits) {
+                    let formatter = NumberFormatter()
+                    formatter.numberStyle = .decimal
+                    formatter.locale = Locale(identifier: "en_GB")
+                    amountText = formatter.string(from: NSNumber(value: number)) ?? digits
+                } else {
+                    amountText = digits
+                }
+            }
         }
-        .navigationBarHidden(true)
-        .overlay(alignment: .top) { navBar }
+        .navigationTitle("")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Skip") { dismiss() }
+                    .font(.system(size: 14, weight: .semibold))
+            }
+        }
         .sensoryFeedback(.impact(weight: .medium), trigger: hapticTrigger)
-    }
-
-    // MARK: - Navigation Bar
-
-    // Custom nav bar to match Figma — native nav bar hidden.
-    // Uses .overlay(alignment: .top) so it sits above the scroll content
-    // without affecting layout (no VStack nesting needed).
-    var navBar: some View {
-        HStack {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.content)
-                    .frame(width: 44, height: 44)
-                    .background(
-                        Circle().fill(Color(hex: "#F2F8F3").opacity(0.9))
-                            .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
-                    )
+        // Mock payment sheet
+        .sheet(isPresented: $showPaymentSheet) {
+            MockApplePaySheet(amount: amountText) {
+                showPaymentSheet = false
+                Task {
+                    try? await Task.sleep(for: .milliseconds(350))
+                    navigateToSuccess = true
+                }
             }
-            .buttonStyle(PressScaleButtonStyle())
-
-            Spacer()
-
-            Button("Skip") {
-                dismiss()
-            }
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(Color.content)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(
-                Capsule().fill(Color(hex: "#F2F8F3").opacity(0.9))
-                    .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
-            )
-            .buttonStyle(PressScaleButtonStyle())
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 56)
+        // Success screen
+        .navigationDestination(isPresented: $navigateToSuccess) {
+            MoneyAddedView(amount: amountText)
+        }
+        // Payment method picker — presented as a sheet so the entire stack collapses
+        // at once when a method is selected, with no intermediate pop animation.
+        .sheet(isPresented: $showChangePaymentSheet) {
+            NavigationStack {
+                ChangePaymentMethodView(selectedPaymentMethod: $selectedPaymentMethod)
+            }
+        }
+        // AddMoneyView owns sheet dismissal for the "See all banks" path.
+        // When SelectBankView sets the method binding, we see the change here and
+        // close the sheet directly — no intermediate ChangePaymentMethodView flash.
+        .onChange(of: selectedPaymentMethod) { _, newValue in
+            guard showChangePaymentSheet else { return }
+            if case .easyBankTransfer = newValue {
+                showChangePaymentSheet = false
+            }
+        }
     }
 
     // MARK: - Coin Stack
 
-    // Placeholder illustration. Each coin is a stacked SF Symbol circle.
-    // Offset stacking: coin[0] is the bottom, each subsequent coin sits 8pt higher.
-    //
-    // Insertion transition: new coin springs in from above (offset -24pt → 0)
-    // Removal transition:   top coin springs up and fades out (0 → offset -24pt)
-    //
-    // .spring(response:dampingFraction:) controls the feel:
-    //   response   = duration of the spring in seconds
-    //   dampingFraction = 1.0 is critically damped (no bounce), < 1.0 bounces
     var coinStack: some View {
-        ZStack {
+        HStack(spacing: -10) {
             ForEach(Array(coins.enumerated()), id: \.element) { index, _ in
                 CoinView()
-                    .offset(y: CGFloat(-index) * 8)
                     .zIndex(Double(index))
-                    .transition(
-                        .asymmetric(
-                            // New coins spring down from above
-                            insertion: .offset(y: -28).combined(with: .opacity),
-                            // Removed coins spring up and vanish
-                            removal:   .offset(y: -28).combined(with: .opacity)
-                        )
-                    )
+                    // scale(anchor: .leading) grows from the coin's left edge —
+                    // exactly where the previous coin ends. Insertion looks like it
+                    // buds out of the stack; removal collapses back into its neighbour.
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0, anchor: .leading).combined(with: .opacity),
+                        removal:   .scale(scale: 0, anchor: .leading).combined(with: .opacity)
+                    ))
             }
         }
-        .frame(height: 80)
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60) // breathing room below nav bar
+        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(height: 72)
     }
 
     // MARK: - Header Text
@@ -179,38 +201,65 @@ struct AddMoneyView: View {
     var paymentField: some View {
         VStack(spacing: 0) {
 
-            // Amount display
-            Text("£\(selectedChip.displayAmount == "0" ? "0" : selectedChip.displayAmount).00")
-                .font(.system(size: 44, weight: .medium))
-                .foregroundStyle(Color.content)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, 16)
-                .padding(.horizontal, 16)
-                // .contentTransition animates the number changing — SwiftUI
-                // knows the text changed and cross-fades between the values.
-                .contentTransition(.numericText())
-                .animation(.easeInOut(duration: 0.2), value: selectedChip)
+            // Amount display.
+            //
+            // A hidden TextField captures input; a Text view renders the formatted
+            // value. This gives us full visual control while the system handles
+            // keyboard management and text binding.
+            //
+            // Focus indicator: a subtle teal border fades in when amountFocused
+            // is true — the user always knows the field is active.
+            // Real TextField — native cursor positioning, drag, tap-to-place.
+            // £ prefix and .00 suffix are fixed Text views; amountText holds
+            // only the number (e.g. "1,000") so formatting logic stays clean.
+            // .tint sets the cursor colour to our accent teal.
+            HStack(alignment: .center, spacing: 2) {
+                Text("£")
+                    .font(.system(size: 44, weight: .medium))
+                    .foregroundStyle(amountText.isEmpty ? Color.contentDisabled : Color.content)
+
+                TextField("0", text: $amountText)
+                    .keyboardType(.numberPad)
+                    .focused($amountFocused)
+                    .font(.system(size: 44, weight: .medium))
+                    .foregroundStyle(Color.content)
+                    .tint(Color.fillAccent)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(minWidth: 24)
+                    .contentTransition(.numericText())
+                    .animation(.easeInOut(duration: 0.2), value: amountText)
+
+                Text(".00")
+                    .font(.system(size: 44, weight: .medium))
+                    .foregroundStyle(Color.contentSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 16)
+            .padding(.horizontal, 16)
+            .onTapGesture {
+                // Always fire a haptic on field tap, regardless of current chip state
+                hapticTrigger += 1
+                if selectedChip != .other { selectedChip = .other }
+                amountFocused = true
+            }
 
             Divider()
                 .padding(.horizontal, 16)
 
-            // Chip row
-            // ScrollView(.horizontal) lets chips overflow on smaller screens
-            // without wrapping — consistent with Figma's single-row layout.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(MoneyChip.allCases) { chip in
-                        ChipButton(
-                            label: chip.rawValue,
-                            isSelected: selectedChip == chip
-                        ) {
-                            selectChip(chip)
-                        }
+            // Chip row — centered
+            HStack(spacing: 8) {
+                ForEach(MoneyChip.allCases) { chip in
+                    ChipButton(
+                        label: chip.rawValue,
+                        isSelected: selectedChip == chip
+                    ) {
+                        selectChip(chip)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 16)
             }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
         }
         .background(
             RoundedRectangle(cornerRadius: 24)
@@ -218,30 +267,63 @@ struct AddMoneyView: View {
         )
     }
 
-    // MARK: - Apple Pay Row
+    // MARK: - Payment Method Row
+    //
+    // Adapts to show whichever payment method is currently selected.
+    // The "Change" button opens ChangePaymentMethodView via navigationDestination.
 
-    var applePayRow: some View {
+    var paymentMethodRow: some View {
         HStack(spacing: 16) {
-            // Apple Pay logo approximation using SF Symbol
-            Image(systemName: "applelogo")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(Color.content)
-                .frame(width: 32, height: 32)
 
-            Text("Apple Pay")
-                .font(.system(size: 16, weight: .semibold))
+            // Icon / badge — Apple logo badge when Apple Pay, SF Symbol otherwise
+            if selectedPaymentMethod == .applePay {
+                HStack(spacing: 4) {
+                    Image(systemName: "apple.logo")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Pay")
+                        .font(.system(size: 13, weight: .semibold))
+                }
                 .foregroundStyle(Color.content)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.backgroundSecondary)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(Color.content.opacity(0.2), lineWidth: 1)
+                        )
+                )
+            } else {
+                Image(systemName: selectedPaymentMethod.iconName)
+                    .font(.system(size: 18))
+                    .foregroundStyle(Color.content)
+                    .frame(width: 40, height: 32)
+            }
+
+            // Labels
+            VStack(alignment: .leading, spacing: 2) {
+                Text(selectedPaymentMethod.displayName)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.content)
+
+                if let sub = selectedPaymentMethod.subtitle {
+                    Text(sub)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.contentSecondary)
+                }
+            }
 
             Spacer()
 
-            Button("Change") { }
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.fillAccent)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule().fill(Color.fillAccent.opacity(0.1))
-                )
+            Button("Change") {
+                showChangePaymentSheet = true
+            }
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(Color.fillAccent)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Color(red: 117/255, green: 129/255, blue: 126/255).opacity(0.1)))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
@@ -249,27 +331,26 @@ struct AddMoneyView: View {
             RoundedRectangle(cornerRadius: 24)
                 .fill(Color.backgroundSecondary)
         )
+        .animation(.easeInOut(duration: 0.2), value: selectedPaymentMethod)
     }
 
     // MARK: - Footer
 
-    // Docked footer that sits above the home indicator.
-    // The gradient mask above it fades the scroll content out so
-    // content doesn't hard-clip — matches the Figma footer pattern.
     var footer: some View {
         VStack(spacing: 16) {
-            // FSCS callout
             HStack(spacing: 12) {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 16))
                     .foregroundStyle(Color.contentSecondary)
                     .frame(width: 24, height: 24)
 
-                // AttributedString lets us colour part of the text differently
-                // without splitting into multiple Text views.
-                Text(fscsText)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.content)
+                (
+                    Text("You're covered by the ")
+                    + Text("Financial Services Compensation Scheme").foregroundStyle(Color.fillAccent)
+                    + Text(" (FSCS) up to £120,000")
+                )
+                .font(.system(size: 12))
+                .foregroundStyle(Color.contentSecondary)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -278,56 +359,32 @@ struct AddMoneyView: View {
                     .fill(Color.fill)
             )
 
-            // Primary CTA — Apple Pay
-            Button {
-                // Apple Pay action
-            } label: {
-                HStack(spacing: 4) {
-                    Text("Pay with")
-                        .font(.system(size: 18, weight: .medium))
-                    Image(systemName: "applelogo")
-                        .font(.system(size: 18, weight: .medium))
-                    Text("Pay")
-                        .font(.system(size: 18, weight: .medium))
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .background(Capsule().fill(Color.black))
-            }
-            .buttonStyle(PressScaleButtonStyle())
-
-            // Secondary CTA
-            Button {
-                // Other payment method action
-            } label: {
-                Text("Other payment method")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.content)
+            if selectedPaymentMethod == .applePay {
+                // Official PKPaymentButton(.addMoney) — exact Apple-certified design
+                PKAddMoneyButton { showPaymentSheet = true }
                     .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(
-                        Capsule().fill(Color.fill)
-                    )
+                    .frame(height: 52)
+            } else {
+                Button { showPaymentSheet = true } label: {
+                    Text("Add money")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(Capsule().fill(Color.fillAccent))
+                }
+                .buttonStyle(PressScaleButtonStyle())
             }
-            .buttonStyle(PressScaleButtonStyle())
         }
         .padding(.horizontal, 32)
         .padding(.bottom, 32)
         .padding(.top, 32)
         .background(
-            // Gradient mask above the footer fades the scroll content out
-            // — prevents a hard clip edge when content scrolls behind it.
-            // This uses a VStack with a gradient-masked rectangle on top
-            // to fade from transparent → background colour.
             Rectangle()
-                .fill(Color(hex: "#F2F8F3"))
+                .fill(Color.page)
                 .overlay(alignment: .top) {
                     LinearGradient(
-                        colors: [
-                            Color(hex: "#F2F8F3").opacity(0),
-                            Color(hex: "#F2F8F3"),
-                        ],
+                        colors: [Color.page.opacity(0), Color.page],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -339,34 +396,45 @@ struct AddMoneyView: View {
 
     // MARK: - Helpers
 
-    // Chip selection: update selected chip, animate coin count change
     func selectChip(_ chip: MoneyChip) {
+        selectedChip  = chip
+        hapticTrigger += 1
+
+        if chip == .other {
+            amountText    = ""
+            amountFocused = true
+            return
+        }
+
+        amountFocused = false
+        amountText    = chip.displayAmount
+
+        coinGeneration += 1
+        let gen      = coinGeneration
         let newCount = chip.coinCount
         let oldCount = coins.count
 
-        selectedChip = chip
-        hapticTrigger += 1
-
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.65)) {
-            if newCount > oldCount {
-                for _ in 0..<(newCount - oldCount) {
-                    coins.append(UUID())
+        if newCount > oldCount {
+            for i in 0..<(newCount - oldCount) {
+                Task {
+                    try? await Task.sleep(for: .seconds(Double(i) * 0.07))
+                    guard gen == coinGeneration else { return }
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.58)) {
+                        coins.append(UUID())
+                    }
                 }
-            } else if newCount < oldCount {
-                coins.removeLast(oldCount - newCount)
+            }
+        } else if newCount < oldCount {
+            for i in 0..<(oldCount - newCount) {
+                Task {
+                    try? await Task.sleep(for: .seconds(Double(i) * 0.06))
+                    guard gen == coinGeneration else { return }
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.72)) {
+                        if coins.count > newCount { coins.removeLast() }
+                    }
+                }
             }
         }
-    }
-
-    // AttributedString for the FSCS callout — "Financial Services
-    // Compensation Scheme" gets the accent colour.
-    // AttributedString is Swift's type-safe attributed text — no NSAttributedString needed.
-    var fscsText: AttributedString {
-        var str = AttributedString("You're covered by the Financial Services Compensation Scheme (FSCS) up to £120,000")
-        if let range = str.range(of: "Financial Services Compensation Scheme") {
-            str[range].foregroundColor = UIColor(Color.fillAccent)
-        }
-        return str
     }
 }
 
@@ -405,13 +473,13 @@ struct ChipButton: View {
             Text(label)
                 .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
                 .foregroundStyle(Color.content)
+                .lineLimit(1)
+                .fixedSize()
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                // Overlay stroke for selected state — cleaner than border modifier
-                // since it doesn't affect layout or change the view's size.
                 .background(
                     Capsule()
-                        .fill(Color(hex: "#F2F8F3"))
+                        .fill(Color.page)
                         .overlay(
                             Capsule()
                                 .strokeBorder(
@@ -423,9 +491,223 @@ struct ChipButton: View {
                             color: isSelected ? Color.black.opacity(0.16) : .clear,
                             radius: 8, x: 0, y: 2
                         )
+                        // Animate the border and shadow appearing/disappearing
+                        .animation(.easeInOut(duration: 0.15), value: isSelected)
                 )
         }
         .buttonStyle(PressScaleButtonStyle())
+    }
+}
+
+// MARK: - Revolut-Style Pay Button
+//
+// A single black capsule with two zones:
+//   Left: "Add money with [Apple logo] Pay"
+//   Right (separated by a hairline): mini Monzo card thumbnail
+//
+// This approach lets the user see at a glance which card will be charged —
+// same pattern as Revolut's payment button. The actual PKPaymentButton
+// (PKAddMoneyButton.swift) is available separately if needed for production.
+
+struct RevolutStylePayButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 0) {
+                // Apple Pay label
+                HStack(spacing: 5) {
+                    Text("Add money with")
+                        .font(.system(size: 15, weight: .medium))
+                    Image(systemName: "apple.logo")
+                        .font(.system(size: 15, weight: .medium))
+                    Text("Pay")
+                        .font(.system(size: 15, weight: .medium))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+
+                // Hairline separator
+                Rectangle()
+                    .fill(Color.white.opacity(0.25))
+                    .frame(width: 1, height: 24)
+
+                // Mini Monzo card thumbnail
+                MiniMonzoCard()
+                    .padding(.horizontal, 16)
+            }
+            .frame(height: 52)
+            .background(Capsule().fill(Color.black))
+        }
+        .buttonStyle(PressScaleButtonStyle())
+    }
+}
+
+// MARK: - Mini Monzo Card
+//
+// A small thumbnail of the Monzo hot-coral card shown in the Revolut-style button.
+// 36×23pt at a 1.565:1 ratio (matches the real card proportions).
+
+struct MiniMonzoCard: View {
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: "#FF6849"), Color(hex: "#D94020")],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            // Chip placeholder
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.white.opacity(0.35))
+                .frame(width: 10, height: 7)
+                .padding(5)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        }
+        .frame(width: 36, height: 23)
+        .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+    }
+}
+
+// MARK: - Mock Apple Pay Sheet
+//
+// Simulates the native Apple Pay confirmation UI.
+// Tapping "Pay with Face ID" calls onConfirm, which dismisses the sheet and
+// navigates to MoneyAddedView.
+
+struct MockApplePaySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let amount: String
+    let onConfirm: () -> Void
+
+    @State private var isConfirming = false
+    @State private var confirmHaptic: Int = 0
+
+    private var formattedAmount: String {
+        let digits = amount.filter { $0.isNumber }
+        guard let n = Int(digits) else { return "0.00" }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = Locale(identifier: "en_GB")
+        return (formatter.string(from: NSNumber(value: n)) ?? "\(n)") + ".00"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+
+            // Drag indicator
+            Capsule()
+                .fill(Color.secondary.opacity(0.3))
+                .frame(width: 36, height: 4)
+                .padding(.top, 12)
+                .padding(.bottom, 20)
+
+            // Merchant header
+            VStack(spacing: 8) {
+                // Monzo logo stand-in
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: "#FF6849"))
+                        .frame(width: 56, height: 56)
+                    Text("M")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+
+                Text("Monzo")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.primary)
+
+                Text("Business account")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.bottom, 24)
+
+            Divider()
+
+            // Amount row
+            HStack {
+                Text("Total")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.primary)
+                Spacer()
+                Text("£\(formattedAmount)")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.primary)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+
+            Divider()
+
+            // Payment card row
+            HStack(spacing: 12) {
+                MiniMonzoCard()
+                    .scaleEffect(1.4)
+                    .frame(width: 50, height: 32)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Apple Pay")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.primary)
+                    Text("Visa •••• 1234")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+
+            Divider()
+
+            Spacer(minLength: 24)
+
+            // Pay with Face ID button
+            Button {
+                guard !isConfirming else { return }
+                isConfirming   = true
+                confirmHaptic += 1
+                onConfirm()
+            } label: {
+                HStack(spacing: 8) {
+                    if isConfirming {
+                        ProgressView()
+                            .tint(.white)
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "faceid")
+                            .font(.system(size: 18, weight: .medium))
+                        Text("Pay with Face ID")
+                            .font(.system(size: 17, weight: .semibold))
+                    }
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(Capsule().fill(Color.black))
+            }
+            .buttonStyle(PressScaleButtonStyle())
+            .padding(.horizontal, 24)
+            .disabled(isConfirming)
+
+            // Cancel
+            Button("Cancel") { dismiss() }
+                .font(.system(size: 16))
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 16)
+        }
+        .padding(.bottom, 8)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.hidden)   // we draw our own
+        .sensoryFeedback(.success, trigger: confirmHaptic)
     }
 }
 
