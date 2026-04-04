@@ -2,35 +2,29 @@
 //  CheckmarkView.swift
 //  MotionLab
 //
-//  Experiment 01 — Checkbox: haptics + scratch sound
+//  Experiment 01 — Checkmark
 //
+//  Three details that make sound + haptics feel right:
+//
+//  1. UIImpactFeedbackGenerator is created once and kept warm with .prepare().
+//     Creating a new generator on every tap introduces latency. Keeping one alive
+//     and calling .prepare() immediately after each use means the next impact
+//     fires consistently.
+//
+//  2. AVAudioSession is configured once at startup.
+//     Without this, sounds are routed through the ringer channel and affected
+//     by the silent switch and system volume inconsistently. `.playback` category
+//     gives us a dedicated, consistent audio channel.
+//
+//  3. Audio players are pre-loaded, not created on every play.
+//     Recreating AVAudioPlayer on each tap introduces latency and inconsistency.
 
+import AVFoundation
 import SwiftUI
-import AVFoundation  // Apple's audio framework — needed to play sounds
 
-// MARK: - Haptic + Sound Engine
-//
-// Key design decisions:
-//
-// 1. Generators are PERSISTENT static instances, not recreated per tap.
-//    Creating a new UIImpactFeedbackGenerator every tap means `prepare()`
-//    has no time to warm up the Taptic Engine, causing inconsistent intensity.
-//    Keeping one instance alive means it stays warm and fires consistently.
-//
-// 2. AVAudioSession is configured once at startup.
-//    Without this, sounds are routed through the ringer channel and affected
-//    by the silent switch and system volume inconsistently. `.playback` category
-//    gives us a dedicated, consistent audio channel.
-//
-// 3. Audio players are pre-loaded, not created on every play.
-//    Recreating AVAudioPlayer on each tap introduces latency and inconsistency.
 class FeedbackEngine {
 
     static let shared = FeedbackEngine()
-
-    // Persistent generators — created once, stay warm
-    private let checkGenerator   = UIImpactFeedbackGenerator(style: .medium)
-    private let uncheckGenerator = UIImpactFeedbackGenerator(style: .light)
 
     // Pre-loaded audio players
     private var checkPlayer:   AVAudioPlayer?
@@ -38,18 +32,22 @@ class FeedbackEngine {
     private var scratchPlayer: AVAudioPlayer?
 
     private init() {
+#if os(iOS)
         // Configure audio session once — consistent volume, ignores silent switch
         try? AVAudioSession.sharedInstance().setCategory(.playback, options: .mixWithOthers)
         try? AVAudioSession.sharedInstance().setActive(true)
+#endif
 
         // Pre-load all sounds so they're ready to fire instantly
         checkPlayer   = player(forResource: "check",   volume: 0.5)
         uncheckPlayer = player(forResource: "uncheck", volume: 0.4)
         scratchPlayer = player(forResource: "scratch", volume: 0.6)
 
-        // Pre-warm generators so first tap feels identical to every other tap
+#if os(iOS)
+        // Persistent generators — created once, stay warm
         checkGenerator.prepare()
         uncheckGenerator.prepare()
+#endif
     }
 
     private func player(forResource name: String, volume: Float) -> AVAudioPlayer? {
@@ -61,6 +59,11 @@ class FeedbackEngine {
         return p
     }
 
+#if os(iOS)
+    // Persistent generators — created once, stay warm
+    private let checkGenerator   = UIImpactFeedbackGenerator(style: .medium)
+    private let uncheckGenerator = UIImpactFeedbackGenerator(style: .light)
+
     func checkHaptic() {
         checkGenerator.impactOccurred()
         checkGenerator.prepare() // Re-warm immediately for the next tap
@@ -70,6 +73,10 @@ class FeedbackEngine {
         uncheckGenerator.impactOccurred()
         uncheckGenerator.prepare()
     }
+#else
+    func checkHaptic() {}
+    func uncheckHaptic() {}
+#endif
 
     func checkSound() {
         checkPlayer?.currentTime = 0
@@ -253,9 +260,11 @@ struct SoundTogglePill: View {
             withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
                 soundEnabled.toggle()
             }
+#if os(iOS)
             let g = UIImpactFeedbackGenerator(style: .light)
             g.prepare()
             g.impactOccurred()
+#endif
         } label: {
             HStack(spacing: 8) {
 

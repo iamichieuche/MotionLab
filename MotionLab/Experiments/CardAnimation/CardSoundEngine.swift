@@ -20,8 +20,10 @@ class CardSoundEngine {
     private var shimmerPlayer: AVAudioPlayer?
 
     private init() {
+#if os(iOS)
         try? AVAudioSession.sharedInstance().setCategory(.playback, options: .mixWithOthers)
         try? AVAudioSession.sharedInstance().setActive(true)
+#endif
 
         landPlayer    = makePlayer(resource: "card_land",    volume: 0.55)
         shimmerPlayer = makePlayer(resource: "card_shimmer", volume: 0.45)

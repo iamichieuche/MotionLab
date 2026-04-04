@@ -84,10 +84,18 @@ extension Color {
 // and matches your Figma tokens exactly.
 private extension Color {
     init(light: Color, dark: Color) {
+#if os(iOS)
         self.init(UIColor { trait in
             trait.userInterfaceStyle == .dark
                 ? UIColor(dark)
                 : UIColor(light)
         })
+#else
+        self.init(NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                ? NSColor(dark)
+                : NSColor(light)
+        })
+#endif
     }
 }

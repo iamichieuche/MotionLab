@@ -14,7 +14,7 @@ struct GateView: View {
 
     var body: some View {
         ZStack {
-            Color.background
+            Color(.systemGroupedBackground)
                 .ignoresSafeArea()
 
             NavigationLink(destination: CardAnimationView(), isActive: $navigate) {
@@ -29,11 +29,13 @@ struct GateView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                Capsule()
                     .fill(Color.content)
             )
             .padding(.horizontal, 24)
             .buttonStyle(PressScaleButtonStyle())
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .padding(.bottom, 48)
         }
         .navigationBarHidden(true)
     }
