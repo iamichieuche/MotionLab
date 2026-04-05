@@ -48,6 +48,7 @@ enum MoneyChip: String, CaseIterable, Identifiable {
 
 struct AddMoneyView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var selectedChip: MoneyChip = .twoFifty
     @State private var coins: [UUID] = [UUID(), UUID()]   // £250 = 2 coins
@@ -66,6 +67,11 @@ struct AddMoneyView: View {
     @State private var showPaymentSheet:        Bool = false
     @State private var navigateToSuccess:       Bool = false
     @State private var showChangePaymentSheet:  Bool = false
+
+    private var isAmountValid: Bool {
+        let digits = amountText.filter { $0.isNumber }
+        return (Int(digits) ?? 0) > 0
+    }
 
     // MARK: - Body
 
@@ -170,6 +176,8 @@ struct AddMoneyView: View {
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .frame(height: 112)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(coins.count) coin\(coins.count == 1 ? "" : "s"), representing £\(selectedChip == .other ? (amountText.isEmpty ? "0" : amountText) : selectedChip.displayAmount)")
     }
 
     @ViewBuilder
@@ -352,27 +360,6 @@ struct AddMoneyView: View {
 
     var footer: some View {
         VStack(spacing: 16) {
-            HStack(spacing: 12) {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(Color.contentSecondary)
-                    .frame(width: 24, height: 24)
-
-                (
-                    Text("You're covered by the ")
-                    + Text("Financial Services Compensation Scheme").foregroundStyle(Color.fillAccent)
-                    + Text(" (FSCS) up to £120,000")
-                )
-                .font(.system(size: 12))
-                .foregroundStyle(Color.contentSecondary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(Color.fill)
-            )
-
             if selectedPaymentMethod == .applePay {
                 Button { showPaymentSheet = true } label: {
                     HStack(spacing: 5) {
@@ -386,9 +373,10 @@ struct AddMoneyView: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
-                    .background(Capsule().fill(Color.black))
+                    .background(Capsule().fill(Color.black.opacity(isAmountValid ? 1 : 0.35)))
                 }
                 .buttonStyle(PressScaleButtonStyle())
+                .disabled(!isAmountValid)
             } else {
                 Button { showPaymentSheet = true } label: {
                     Text("Add money")
@@ -396,9 +384,10 @@ struct AddMoneyView: View {
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
-                        .background(Capsule().fill(Color.fillAccent))
+                        .background(Capsule().fill(Color.fillAccent.opacity(isAmountValid ? 1 : 0.35)))
                 }
                 .buttonStyle(PressScaleButtonStyle())
+                .disabled(!isAmountValid)
             }
         }
         .padding(.horizontal, 32)
@@ -439,6 +428,13 @@ struct AddMoneyView: View {
         let newCount = chip.coinCount
         let oldCount = coins.count
 
+        // Skip stagger and animate instantly when reduce motion is enabled
+        if reduceMotion {
+            while coins.count < newCount { coins.append(UUID()) }
+            while coins.count > newCount { coins.removeLast() }
+            return
+        }
+
         if newCount > oldCount {
             for i in 0..<(newCount - oldCount) {
                 Task {
@@ -470,6 +466,8 @@ struct CoinView: View {
     var index:       Int  = 0
     var isFirstCoin: Bool = false
     var isTopCoin:   Bool = true
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Specular rim highlight
     @State private var rimGlow: Double = 0
@@ -558,7 +556,7 @@ struct CoinView: View {
     }
 
     private func startAnimations() {
-        // Stagger each coin's rim glow so they never pulse in sync
+        guard !reduceMotion else { return }
         Task {
             try? await Task.sleep(for: .milliseconds(Int(Double(index) * 380)))
             pulseRim()
@@ -889,6 +887,7 @@ struct MockApplePaySheet: View {
         }
         .padding(.bottom, 8)
         .presentationDetents([.medium])
+        .presentationCornerRadius(24)
         .presentationDragIndicator(.hidden)   // we draw our own
         .sensoryFeedback(.success, trigger: confirmHaptic)
     }

@@ -108,7 +108,7 @@ struct OnboardingCardView: View {
                             .opacity(headlineOpacity)
                             .offset(y: headlineDriftY)
 
-                        Text("Your card's on its way 🎉\nAdd money now to get started.")
+                        Text("Add money now to get started.")
                             .font(.system(size: 17, weight: .regular))
                             .foregroundStyle(Color.contentSecondary)
                             .lineSpacing(5)
@@ -122,19 +122,43 @@ struct OnboardingCardView: View {
                 // Bottom padding clears the docked button (52pt height + 32pt inset + some air)
                 .padding(.bottom, 96)
 
-                // MARK: — CTA (docked)
-                Button("Add money") {
-                    navigateToAddMoney = true
+                // MARK: — FSCS callout + CTA (docked together)
+                VStack(spacing: 12) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(Color.contentSecondary)
+                            .frame(width: 24, height: 24)
+
+                        (
+                            Text("You're covered by the ")
+                            + Text("Financial Services Compensation Scheme").foregroundStyle(Color(hex: "#218FB7"))
+                            + Text(" (FSCS) up to £85,000")
+                        )
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.contentSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 24)
+                            .fill(Color(hex: "#75817E").opacity(0.10))
+                    )
+
+                    Button("Add money") {
+                        navigateToAddMoney = true
+                    }
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Capsule().fill(Color(hex: "#218FB7")))
+                    .buttonStyle(PressScaleButtonStyle())
                 }
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Capsule().fill(Color(hex: "#218FB7")))
                 .padding(.horizontal, 24)
-                .buttonStyle(PressScaleButtonStyle())
-                .opacity(ctaOpacity)
                 .padding(.bottom, 32)
+                .opacity(ctaOpacity)
             }
             .navigationDestination(isPresented: $navigateToAddMoney) {
                 AddMoneyView()
