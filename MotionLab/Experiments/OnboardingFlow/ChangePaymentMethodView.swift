@@ -31,10 +31,10 @@ struct ChangePaymentMethodView: View {
                     MethodRow(
                         icon: applePayIcon,
                         title: "Apple Pay",
-                        subtitle: nil,
-                        badge: "Instant",
+                        subtitle: "Usually arrives instantly",
+                        badge: nil,
                         isSelected: selectedPaymentMethod == .applePay,
-                        showChevron: false
+                        showChevron: true
                     ) {
                         selectedPaymentMethod = .applePay
                         dismiss()
@@ -71,7 +71,7 @@ struct ChangePaymentMethodView: View {
 
                         // Preset banks
                         BankMethodRow(
-                            bank: Bank(name: "NatWest", initial: "N", color: Color(hex: "#42145F")),
+                            bank: Bank(name: "NatWest", initial: "N", color: Color(hex: "#42145F"), assetName: "natwest_logo"),
                             isSelected: {
                                 if case .easyBankTransfer("NatWest") = selectedPaymentMethod { return true }
                                 return false
@@ -84,7 +84,7 @@ struct ChangePaymentMethodView: View {
                         Divider().padding(.leading, 56)
 
                         BankMethodRow(
-                            bank: Bank(name: "Chase", initial: "C", color: Color(hex: "#005EB8")),
+                            bank: Bank(name: "Chase", initial: "C", color: Color(hex: "#005EB8"), assetName: "chase_logo"),
                             isSelected: {
                                 if case .easyBankTransfer("Chase") = selectedPaymentMethod { return true }
                                 return false
@@ -219,15 +219,16 @@ struct ChangePaymentMethodView: View {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.content)
-                        .frame(width: 32, height: 32)
-                        .background(Circle().fill(Color.backgroundSecondary))
                 }
             }
         }
         .navigationDestination(isPresented: $navigateToSelectBank) {
-            SelectBankView(selectedPaymentMethod: $selectedPaymentMethod)
+            // Pass dismiss() as onClose so SelectBankView's X closes the whole sheet,
+            // not just pops within the NavigationStack.
+            SelectBankView(
+                selectedPaymentMethod: $selectedPaymentMethod,
+                onClose: { dismiss() }
+            )
         }
     }
 
@@ -236,14 +237,23 @@ struct ChangePaymentMethodView: View {
     // Apple Pay: Apple logo in a dark rounded-square badge
     private var applePayIcon: AnyView {
         AnyView(
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.content)
-                    .frame(width: 40, height: 40)
+            HStack(spacing: 3) {
                 Image(systemName: "apple.logo")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(Color.page)
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Pay")
+                    .font(.system(size: 13, weight: .semibold))
             }
+            .foregroundStyle(Color.content)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.backgroundSecondary)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(Color.content.opacity(0.2), lineWidth: 1)
+                    )
+            )
         )
     }
 
@@ -295,20 +305,9 @@ private struct MethodRow: View {
                 icon
 
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(title)
-                            .font(.system(size: 16))
-                            .foregroundStyle(Color.content)
-
-                        if let badge {
-                            Text(badge)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(Color.fillAccent)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(Color.fillAccent.opacity(0.12)))
-                        }
-                    }
+                    Text(title)
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.content)
 
                     if let sub = subtitle {
                         Text(sub)
@@ -323,6 +322,13 @@ private struct MethodRow: View {
                     Image(systemName: "checkmark")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.fillAccent)
+                } else if let badge {
+                    Text(badge)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color(hex: "#34C759")))
                 } else if showChevron {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .medium))

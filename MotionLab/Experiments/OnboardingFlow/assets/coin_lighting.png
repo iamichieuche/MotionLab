@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 52.7809 188.043" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path id="Lighting_01" d="M0 0C28.4957 2.93104 47.3875 24.7823 51.5486 52.4078C56.2365 83.1399 46.9837 114.592 33.3591 141.743C24.914 158.399 14.4498 174.002 2.19468 188.043L1.77332 187.745C22.8422 157.715 40.2416 123.946 46.0707 87.44C50.425 60.9728 47.3173 29.2051 24.7385 11.6364C17.5224 5.94985 9.00698 1.93063 0.0175746 0H0Z" fill="url(#paint0_linear_0_18)"/>
+<defs>
+<linearGradient id="paint0_linear_0_18" x1="57.1844" y1="56.8728" x2="-4.01892" y2="197.403" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FF97BF"/>
+<stop offset="1" stop-color="#FF5144"/>
+</linearGradient>
+</defs>
+</svg>

@@ -16,23 +16,25 @@ import SwiftUI
 // MARK: - Bank Model
 
 struct Bank: Identifiable {
-    let id       = UUID()
-    let name:    String
-    let initial: String
-    let color:   Color   // brand color used as icon background
+    let id        = UUID()
+    let name:     String
+    let initial:  String
+    let color:    Color    // brand color fallback if asset is missing
+    let assetName: String  // image asset name in Assets.xcassets
 }
 
 // MARK: - View
 
 struct SelectBankView: View {
     @Binding var selectedPaymentMethod: PaymentMethod
+    var onClose: (() -> Void)? = nil   // closes the whole sheet; nil in previews
 
     private let banks: [Bank] = [
-        Bank(name: "HSBC",       initial: "H", color: Color(hex: "#DB0011")),
-        Bank(name: "Halifax",    initial: "H", color: Color(hex: "#005EB8")),
-        Bank(name: "NatWest",    initial: "N", color: Color(hex: "#42145F")),
-        Bank(name: "Nationwide", initial: "N", color: Color(hex: "#1F3C88")),
-        Bank(name: "Revolut",    initial: "R", color: Color(hex: "#191C1F")),
+        Bank(name: "HSBC",       initial: "H", color: Color(hex: "#DB0011"), assetName: "hsbc_logo"),
+        Bank(name: "Halifax",    initial: "H", color: Color(hex: "#005EB8"), assetName: "halifax_logo"),
+        Bank(name: "NatWest",    initial: "N", color: Color(hex: "#42145F"), assetName: "natwest_logo"),
+        Bank(name: "Nationwide", initial: "N", color: Color(hex: "#1F3C88"), assetName: "nationwide_logo"),
+        Bank(name: "Revolut",    initial: "R", color: Color(hex: "#191C1F"), assetName: "revolut_logo"),
     ]
 
     var body: some View {
@@ -67,11 +69,6 @@ struct SelectBankView: View {
         .navigationTitle("Select your bank")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button("Cancel") { /* AddMoneyView closes the sheet */ }
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.fillAccent)
-            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Help") { }
                     .font(.system(size: 14, weight: .semibold))
@@ -120,30 +117,38 @@ private struct BankRow: View {
 
 // MARK: - Bank Icon View
 //
-// Approximates a real bank logo using brand color + bold initial letter.
-// Consistent across SelectBankView and ChangePaymentMethodView.
-// Replace with Image(bankName) once real assets are available.
+// Uses a bundled image asset (e.g. "bank_hsbc" in Assets.xcassets).
+// Falls back to a branded-color square with bold initial if the asset is missing.
+// To add real logos: drag PNGs into Assets.xcassets named bank_hsbc, bank_halifax,
+// bank_natwest, bank_nationwide, bank_revolut.
 
 struct BankIconView: View {
     let bank: Bank
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(bank.color)
+        if let uiImage = UIImage(named: bank.assetName) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFit()
                 .frame(width: 40, height: 40)
-
-            Text(bank.initial)
-                .font(.system(size: 17, weight: .black))
-                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(bank.color)
+                    .frame(width: 40, height: 40)
+                Text(bank.initial)
+                    .font(.system(size: 17, weight: .black))
+                    .foregroundStyle(.white)
+            }
         }
     }
 }
 
-// Convenience init so ChangePaymentMethodView can construct icons inline
+// Convenience init so ChangePaymentMethodView can pass inline bank data
 extension BankIconView {
-    init(name: String, initial: String, color: Color) {
-        self.bank = Bank(name: name, initial: initial, color: color)
+    init(name: String, initial: String, color: Color, assetName: String) {
+        self.bank = Bank(name: name, initial: initial, color: color, assetName: assetName)
     }
 }
 

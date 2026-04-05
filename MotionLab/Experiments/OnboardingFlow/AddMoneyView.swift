@@ -163,21 +163,28 @@ struct AddMoneyView: View {
     // MARK: - Coin Stack
 
     var coinStack: some View {
-        HStack(spacing: -10) {
+        HStack(spacing: -58) {
             ForEach(Array(coins.enumerated()), id: \.element) { index, _ in
-                CoinView()
-                    .zIndex(Double(index))
-                    // scale(anchor: .leading) grows from the coin's left edge —
-                    // exactly where the previous coin ends. Insertion looks like it
-                    // buds out of the stack; removal collapses back into its neighbour.
-                    .transition(.asymmetric(
-                        insertion: .scale(scale: 0, anchor: .leading).combined(with: .opacity),
-                        removal:   .scale(scale: 0, anchor: .leading).combined(with: .opacity)
-                    ))
+                coinItem(index: index)
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
-        .frame(height: 72)
+        .frame(height: 112)
+    }
+
+    @ViewBuilder
+    private func coinItem(index: Int) -> some View {
+        let transition = AnyTransition.asymmetric(
+            insertion: .scale(scale: 0, anchor: .leading).combined(with: .opacity),
+            removal:   .scale(scale: 0, anchor: .leading).combined(with: .opacity)
+        )
+        CoinView(
+            index:       index,
+            isFirstCoin: index == 0,
+            isTopCoin:   index == coins.count - 1
+        )
+        .zIndex(Double(index))
+        .transition(transition)
     }
 
     // MARK: - Header Text
@@ -294,6 +301,13 @@ struct AddMoneyView: View {
                                 .strokeBorder(Color.content.opacity(0.2), lineWidth: 1)
                         )
                 )
+            } else if case .easyBankTransfer(let bankName) = selectedPaymentMethod {
+                BankIconView(
+                    name: bankName,
+                    initial: String(bankName.prefix(1)),
+                    color: .gray,
+                    assetName: bankName.lowercased().replacingOccurrences(of: " ", with: "_") + "_logo"
+                )
             } else {
                 Image(systemName: selectedPaymentMethod.iconName)
                     .font(.system(size: 18))
@@ -360,10 +374,21 @@ struct AddMoneyView: View {
             )
 
             if selectedPaymentMethod == .applePay {
-                // Official PKPaymentButton(.addMoney) — exact Apple-certified design
-                PKAddMoneyButton { showPaymentSheet = true }
+                Button { showPaymentSheet = true } label: {
+                    HStack(spacing: 5) {
+                        Text("Add money with")
+                            .font(.system(size: 18, weight: .medium))
+                        Image(systemName: "apple.logo")
+                            .font(.system(size: 18, weight: .medium))
+                        Text("Pay")
+                            .font(.system(size: 18, weight: .medium))
+                    }
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
+                    .background(Capsule().fill(Color.black))
+                }
+                .buttonStyle(PressScaleButtonStyle())
             } else {
                 Button { showPaymentSheet = true } label: {
                     Text("Add money")
@@ -441,23 +466,181 @@ struct AddMoneyView: View {
 // MARK: - Coin View
 
 struct CoinView: View {
+
+    var index:       Int  = 0
+    var isFirstCoin: Bool = false
+    var isTopCoin:   Bool = true
+
+    // Specular rim highlight
+    @State private var rimGlow: Double = 0
+
+
+    // Top-right sparkle (last coin only)
+    @State private var s1Scale:    CGFloat = 0.1
+    @State private var s1Opacity:  Double  = 0
+    @State private var s1Rotation: Double  = 0
+
+    // Bottom-left sparkle (first coin only)
+    @State private var s2Scale:    CGFloat = 0.1
+    @State private var s2Opacity:  Double  = 0
+    @State private var s2Rotation: Double  = 0
+
     var body: some View {
         ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: "#F7D84E"), Color(hex: "#D4A800")],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+            Image("subs_coin")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 90, height: 90)
+                // Specular rim highlight — a warm radial glow on the left rim,
+                // exactly where light catches the curved edge in the Monzo design.
+                // Masked to coin shape so it never bleeds outside.
+                .overlay(
+                    RadialGradient(
+                        colors: [
+                            Color.white.opacity(0.85),
+                            Color(red: 1, green: 0.72, blue: 0.55).opacity(0.5),
+                            Color.clear
+                        ],
+                        center: UnitPoint(x: 0.18, y: 0.48),
+                        startRadius: 1,
+                        endRadius: 22
                     )
+                    .mask(Image("subs_coin").resizable().scaledToFit())
+                    .opacity(rimGlow)
+                    .allowsHitTesting(false)
                 )
-                .shadow(color: Color.black.opacity(0.18), radius: 6, x: 0, y: 3)
+                // Depth shadow on back coins — right portion darkens behind overlap
+                .overlay(
+                    Group {
+                        if !isTopCoin {
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .clear,               location: 0.0),
+                                    .init(color: .black.opacity(0.18), location: 0.45),
+                                    .init(color: .black.opacity(0.52), location: 1.0),
+                                ],
+                                startPoint: UnitPoint(x: 0.15, y: 0.5),
+                                endPoint:   .trailing
+                            )
+                            .mask(Image("subs_coin").resizable().scaledToFit())
+                        }
+                    }
+                )
+                .shadow(
+                    color: .black.opacity(isTopCoin ? 0.40 : 0.22),
+                    radius: isTopCoin ? 14 : 8,
+                    x: isTopCoin ? 4 : 2,
+                    y: isTopCoin ? 10 : 6
+                )
 
-            Image(systemName: "sterlingsign")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(Color(hex: "#8B6A00"))
+            // Top-right sparkle — last coin only
+            if isTopCoin {
+                CoinSparkle()
+                    .frame(width: 14, height: 14)
+                    .scaleEffect(s1Scale)
+                    .opacity(s1Opacity)
+                    .rotationEffect(.degrees(s1Rotation))
+                    .offset(x: 38, y: -30)
+            }
+
+            // Bottom-left sparkle — first coin only
+            if isFirstCoin {
+                CoinSparkle()
+                    .frame(width: 11, height: 11)
+                    .scaleEffect(s2Scale)
+                    .opacity(s2Opacity)
+                    .rotationEffect(.degrees(s2Rotation))
+                    .offset(x: -32, y: 28)
+            }
         }
-        .frame(width: 56, height: 56)
+        .frame(width: 90, height: 90)
+        .onAppear { startAnimations() }
+    }
+
+    private func startAnimations() {
+        // Stagger each coin's rim glow so they never pulse in sync
+        Task {
+            try? await Task.sleep(for: .milliseconds(Int(Double(index) * 380)))
+            pulseRim()
+        }
+        if isTopCoin   { twinkle1() }
+        if isFirstCoin {
+            Task {
+                try? await Task.sleep(for: .milliseconds(700))
+                twinkle2()
+            }
+        }
+    }
+
+    // Rim glow — fades in slowly, holds, fades out, waits, repeats
+    private func pulseRim() {
+        rimGlow = 0
+        withAnimation(.easeIn(duration: 0.5))  { rimGlow = 1.0 }
+        Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            withAnimation(.easeOut(duration: 0.7)) { rimGlow = 0 }
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(Int.random(in: 2800...4500)))
+            pulseRim()
+        }
+    }
+
+    // Top-right sparkle (last coin)
+    private func twinkle1() {
+        s1Scale = 0.1; s1Opacity = 0; s1Rotation = 0
+        withAnimation(.spring(duration: 0.32, bounce: 0.35)) { s1Scale   = 1.0 }
+        withAnimation(.easeOut(duration: 0.22))              { s1Opacity = 1.0 }
+        withAnimation(.linear(duration: 0.55))               { s1Rotation = 45 }
+        Task {
+            try? await Task.sleep(for: .milliseconds(360))
+            withAnimation(.easeIn(duration: 0.28)) { s1Opacity = 0; s1Scale = 0.5 }
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(Int.random(in: 2400...4200)))
+            twinkle1()
+        }
+    }
+
+    // Bottom-left sparkle (first coin)
+    private func twinkle2() {
+        s2Scale = 0.1; s2Opacity = 0; s2Rotation = 0
+        withAnimation(.spring(duration: 0.30, bounce: 0.35)) { s2Scale   = 0.85 }
+        withAnimation(.easeOut(duration: 0.20))              { s2Opacity = 0.85 }
+        withAnimation(.linear(duration: 0.50))               { s2Rotation = 45 }
+        Task {
+            try? await Task.sleep(for: .milliseconds(340))
+            withAnimation(.easeIn(duration: 0.26)) { s2Opacity = 0; s2Scale = 0.4 }
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(Int.random(in: 2600...4400)))
+            twinkle2()
+        }
+    }
+}
+
+// MARK: - Coin Sparkle Shape
+
+private struct CoinSparkle: View {
+    var body: some View {
+        Canvas { ctx, size in
+            let cx = size.width / 2
+            let cy = size.height / 2
+            let outer = min(cx, cy)
+            let inner = outer * 0.18
+
+            var path = Path()
+            for i in 0..<8 {
+                let angle = Double(i) * .pi / 4 - .pi / 2
+                let r     = i % 2 == 0 ? outer : inner
+                let pt    = CGPoint(x: cx + CGFloat(cos(angle)) * r,
+                                    y: cy + CGFloat(sin(angle)) * r)
+                i == 0 ? path.move(to: pt) : path.addLine(to: pt)
+            }
+            path.closeSubpath()
+            ctx.fill(path, with: .color(.white))
+        }
+        .shadow(color: .white.opacity(0.9), radius: 5)
     }
 }
 

@@ -34,7 +34,7 @@ enum PaymentMethod: Equatable {
     // Secondary label shown below displayName (nil hides the subtitle line)
     var subtitle: String? {
         switch self {
-        case .applePay:                        return nil
+        case .applePay:                        return "Usually arrives instantly"
         case .easyBankTransfer:                return "Easy bank transfer"
         case .chequeDeposit:                   return "Up to £500"
         case .cashDeposit:                     return "PayPoint or Post Office"
