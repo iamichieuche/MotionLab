@@ -14,6 +14,10 @@ import Lottie
 struct OnboardingGateView: View {
     @State private var navigate = false
 
+    @State private var textOpacity:   Double  = 0
+    @State private var textOffsetY:   CGFloat = 10
+    @State private var ctaOpacity:    Double  = 0
+
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.page.ignoresSafeArea()
@@ -46,6 +50,8 @@ struct OnboardingGateView: View {
                         .multilineTextAlignment(.center)
                 }
                 .padding(.horizontal, 32)
+                .opacity(textOpacity)
+                .offset(y: textOffsetY)
 
                 Spacer(minLength: 0)
             }
@@ -59,14 +65,24 @@ struct OnboardingGateView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
+                    .background(Capsule().fill(Color(hex: "#218FB7")))
             }
-            .background(Capsule().fill(Color(hex: "#218FB7")))
             .padding(.horizontal, 24)
             .buttonStyle(PressScaleButtonStyle())
             .padding(.bottom, 32)
+            .opacity(ctaOpacity)
         }
         .navigationDestination(isPresented: $navigate) {
             OnboardingCardView()
+        }
+        .onAppear {
+            withAnimation(.spring(duration: 0.5, bounce: 0.1).delay(0.15)) {
+                textOpacity = 1
+                textOffsetY = 0
+            }
+            withAnimation(.easeOut(duration: 0.35).delay(0.35)) {
+                ctaOpacity = 1
+            }
         }
     }
 }

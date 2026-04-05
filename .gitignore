@@ -2,4 +2,6 @@
 .DS_Store
 
 # Private — animation recordings for case study, not for repo
-MotionLab/Experiments/CardAnimation/versions/
+**/versions/
+**/version/
+/versions/

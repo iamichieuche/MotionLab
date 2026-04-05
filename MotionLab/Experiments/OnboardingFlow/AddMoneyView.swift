@@ -230,7 +230,7 @@ struct AddMoneyView: View {
             // .tint sets the cursor colour to our accent teal.
             HStack(alignment: .center, spacing: 2) {
                 Text("£")
-                    .font(.system(size: 44, weight: .medium))
+                    .font(.system(size: 44, weight: .medium).monospacedDigit())
                     .foregroundStyle(amountText.isEmpty ? Color.contentDisabled : Color.content)
 
                 // TextField is always in the hierarchy for focus/keyboard management.
@@ -241,7 +241,7 @@ struct AddMoneyView: View {
                     TextField("0", text: $amountText)
                         .keyboardType(.numberPad)
                         .focused($amountFocused)
-                        .font(.system(size: 44, weight: .medium))
+                        .font(.system(size: 44, weight: .medium).monospacedDigit())
                         .foregroundStyle(Color.content)
                         .tint(Color.fillAccent)
                         .fixedSize(horizontal: true, vertical: false)
@@ -249,7 +249,7 @@ struct AddMoneyView: View {
                         .opacity(amountFocused ? 1 : 0)
 
                     Text(amountText.isEmpty ? "0" : amountText)
-                        .font(.system(size: 44, weight: .medium))
+                        .font(.system(size: 44, weight: .medium).monospacedDigit())
                         .foregroundStyle(amountText.isEmpty ? Color.contentDisabled : Color.content)
                         .contentTransition(.numericText(value: Double(amountText.filter { $0.isNumber }) ?? 0))
                         .animation(.snappy(duration: 0.3), value: amountText)
@@ -379,11 +379,11 @@ struct AddMoneyView: View {
                 Button { showPaymentSheet = true } label: {
                     HStack(spacing: 5) {
                         Text("Add money with")
-                            .font(.system(size: 18, weight: .medium))
+                            .font(.system(size: 17, weight: .semibold))
                         Image(systemName: "apple.logo")
-                            .font(.system(size: 18, weight: .medium))
+                            .font(.system(size: 17, weight: .semibold))
                         Text("Pay")
-                            .font(.system(size: 18, weight: .medium))
+                            .font(.system(size: 17, weight: .semibold))
                     }
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -395,7 +395,7 @@ struct AddMoneyView: View {
             } else {
                 Button { showPaymentSheet = true } label: {
                     Text("Add money")
-                        .font(.system(size: 18, weight: .medium))
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)

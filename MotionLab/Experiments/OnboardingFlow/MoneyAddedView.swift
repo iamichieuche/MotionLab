@@ -123,9 +123,9 @@ struct MoneyAddedView: View {
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 48)
+                    .frame(height: 52)
+                    .background(Capsule().fill(Color.fillAccent))
             }
-            .background(Capsule().fill(Color.fillAccent))
             .buttonStyle(PressScaleButtonStyle())
             .scaleEffect(ctaScale)
         }

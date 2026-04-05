@@ -49,6 +49,16 @@ struct OnboardingCardView: View {
     @State private var entranceGeneration: Int  = 0
     @State private var navigateToAddMoney: Bool = false
 
+    // MARK: - FSCS text
+
+    private var fscsText: Text {
+        var full = AttributedString("You're covered by the Financial Services Compensation Scheme (FSCS) up to £85,000")
+        if let range = full.range(of: "Financial Services Compensation Scheme") {
+            full[range].foregroundColor = Color(hex: "#218FB7")
+        }
+        return Text(full)
+    }
+
     var body: some View {
         GeometryReader { geo in
             let cardWidth = min(340, geo.size.width - 48)
@@ -103,7 +113,7 @@ struct OnboardingCardView: View {
                     // MARK: — Text group
                     VStack(spacing: 12) {
                         Text("Your business account is ready!")
-                            .font(.system(size: 26, weight: .bold))
+                            .font(.system(size: 28, weight: .bold))
                             .foregroundStyle(Color.content)
                             .opacity(headlineOpacity)
                             .offset(y: headlineDriftY)
@@ -130,13 +140,9 @@ struct OnboardingCardView: View {
                             .foregroundStyle(Color.contentSecondary)
                             .frame(width: 24, height: 24)
 
-                        (
-                            Text("You're covered by the ")
-                            + Text("Financial Services Compensation Scheme").foregroundStyle(Color(hex: "#218FB7"))
-                            + Text(" (FSCS) up to £85,000")
-                        )
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.contentSecondary)
+                        fscsText
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.contentSecondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
@@ -152,8 +158,8 @@ struct OnboardingCardView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
+                            .background(Capsule().fill(Color(hex: "#218FB7")))
                     }
-                    .background(Capsule().fill(Color(hex: "#218FB7")))
                     .buttonStyle(PressScaleButtonStyle())
                 }
                 .padding(.horizontal, 24)
