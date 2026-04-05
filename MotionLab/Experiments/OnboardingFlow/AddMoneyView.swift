@@ -233,16 +233,31 @@ struct AddMoneyView: View {
                     .font(.system(size: 44, weight: .medium))
                     .foregroundStyle(amountText.isEmpty ? Color.contentDisabled : Color.content)
 
-                TextField("0", text: $amountText)
-                    .keyboardType(.numberPad)
-                    .focused($amountFocused)
-                    .font(.system(size: 44, weight: .medium))
-                    .foregroundStyle(Color.content)
-                    .tint(Color.fillAccent)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .frame(minWidth: 24)
-                    .contentTransition(.numericText())
-                    .animation(.easeInOut(duration: 0.2), value: amountText)
+                // TextField is always in the hierarchy for focus/keyboard management.
+                // A Text overlay handles display when not editing — contentTransition
+                // only works on Text, not TextField, so this is required to get the
+                // numeric scroll animation on chip selection.
+                ZStack {
+                    TextField("0", text: $amountText)
+                        .keyboardType(.numberPad)
+                        .focused($amountFocused)
+                        .font(.system(size: 44, weight: .medium))
+                        .foregroundStyle(Color.content)
+                        .tint(Color.fillAccent)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .frame(minWidth: 24)
+                        .opacity(amountFocused ? 1 : 0)
+
+                    Text(amountText.isEmpty ? "0" : amountText)
+                        .font(.system(size: 44, weight: .medium))
+                        .foregroundStyle(amountText.isEmpty ? Color.contentDisabled : Color.content)
+                        .contentTransition(.numericText(value: Double(amountText.filter { $0.isNumber }) ?? 0))
+                        .animation(.snappy(duration: 0.3), value: amountText)
+                        .allowsHitTesting(false)
+                        .opacity(amountFocused ? 0 : 1)
+                }
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(minWidth: 24)
 
                 Text(".00")
                     .font(.system(size: 44, weight: .medium))
@@ -421,7 +436,7 @@ struct AddMoneyView: View {
         }
 
         amountFocused = false
-        amountText    = chip.displayAmount
+        amountText = chip.displayAmount
 
         coinGeneration += 1
         let gen      = coinGeneration
@@ -649,6 +664,8 @@ struct ChipButton: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @State private var bounceScale: CGFloat = 1.0
+
     var body: some View {
         Button(action: action) {
             Text(label)
@@ -677,6 +694,15 @@ struct ChipButton: View {
                 )
         }
         .buttonStyle(PressScaleButtonStyle())
+        .scaleEffect(bounceScale)
+        .onChange(of: isSelected) { _, selected in
+            guard selected else { return }
+            withAnimation(.spring(duration: 0.18, bounce: 0.6), completionCriteria: .logicallyComplete) {
+                bounceScale = 1.06
+            } completion: {
+                withAnimation(.spring(duration: 0.22, bounce: 0.2)) { bounceScale = 1.0 }
+            }
+        }
     }
 }
 

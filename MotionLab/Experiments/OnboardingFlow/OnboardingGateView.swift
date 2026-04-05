@@ -53,13 +53,13 @@ struct OnboardingGateView: View {
             .padding(.bottom, 96)
 
             // Button — docked at 32pt from screen bottom, consistent across all screens
-            Button("Complete application") {
-                navigate = true
+            Button { navigate = true } label: {
+                Text("Complete application")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
             }
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
             .background(Capsule().fill(Color(hex: "#218FB7")))
             .padding(.horizontal, 24)
             .buttonStyle(PressScaleButtonStyle())

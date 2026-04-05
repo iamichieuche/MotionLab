@@ -23,10 +23,6 @@ struct MoneyAddedView: View {
     @Environment(\.dismiss) private var dismiss
     let amount: String   // formatted number string, e.g. "250" or "1,000"
 
-    private var numericAmount: Int {
-        Int(amount.filter { $0.isNumber }) ?? 0
-    }
-
     private var displayAmount: String {
         amount.isEmpty ? "0" : amount
     }
@@ -39,12 +35,13 @@ struct MoneyAddedView: View {
 
     // MARK: - State
 
-    @State private var notifVisible:   Bool   = false
-    @State private var lottieOpacity:  Double = 0
-    @State private var textOpacity:    Double = 0
+    @State private var notifVisible:   Bool    = false
+    @State private var lottieOpacity:  Double  = 0
+    @State private var textOpacity:    Double  = 0
     @State private var textOffsetY:    CGFloat = 12
-    @State private var footerOpacity:  Double = 0
-    @State private var hapticTrigger:  Int    = 0
+    @State private var footerOpacity:  Double  = 0
+    @State private var hapticTrigger:  Int     = 0
+    @State private var ctaScale:       CGFloat = 0.88
 
     var body: some View {
         ZStack {
@@ -121,13 +118,16 @@ struct MoneyAddedView: View {
                     .fill(Color(hex: "#75817E").opacity(0.10))
             )
 
-            Button("Next") { dismiss() }
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .background(Capsule().fill(Color.fillAccent))
-                .buttonStyle(PressScaleButtonStyle())
+            Button { dismiss() } label: {
+                Text("Next")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+            }
+            .background(Capsule().fill(Color.fillAccent))
+            .buttonStyle(PressScaleButtonStyle())
+            .scaleEffect(ctaScale)
         }
         .padding(.horizontal, 32)
         .padding(.bottom, 32)
@@ -151,38 +151,29 @@ struct MoneyAddedView: View {
     // MARK: - Entrance
 
     func runEntrance() {
-        hapticTrigger += 1
+        hapticTrigger   += 1
+        ctaScale         = 0.88
 
-        // 200ms — notification slides in from top
-        Task {
-            try? await Task.sleep(for: .milliseconds(200))
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-                notifVisible = true
-            }
+        // Visual animations — delay replaces Task.sleep chains
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.75).delay(0.20)) {
+            notifVisible = true
+        }
+        withAnimation(.easeOut(duration: 0.3).delay(0.40)) {
+            lottieOpacity = 1
+        }
+        withAnimation(.spring(duration: 0.5, bounce: 0.1).delay(0.65)) {
+            textOpacity = 1
+            textOffsetY = 0
+        }
+        withAnimation(.easeOut(duration: 0.35).delay(0.90)) {
+            footerOpacity = 1
+        }
+        // Next button springs in with a bounce at the emotional peak
+        withAnimation(.spring(duration: 0.5, bounce: 0.35).delay(0.90)) {
+            ctaScale = 1.0
         }
 
-        // 400ms — Lottie fades in
-        Task {
-            try? await Task.sleep(for: .milliseconds(400))
-            withAnimation(.easeOut(duration: 0.3)) { lottieOpacity = 1 }
-        }
-
-        // 650ms — title + body drift up
-        Task {
-            try? await Task.sleep(for: .milliseconds(650))
-            withAnimation(.spring(duration: 0.5, bounce: 0.1)) {
-                textOpacity = 1
-                textOffsetY = 0
-            }
-        }
-
-        // 900ms — footer fades in
-        Task {
-            try? await Task.sleep(for: .milliseconds(900))
-            withAnimation(.easeOut(duration: 0.35)) { footerOpacity = 1 }
-        }
-
-        // 2200ms — notification slides back out and is removed from hierarchy
+        // Auto-dismiss notification — Task remains (timed behaviour, not entrance animation)
         Task {
             try? await Task.sleep(for: .milliseconds(2200))
             withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {

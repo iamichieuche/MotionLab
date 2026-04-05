@@ -91,7 +91,7 @@ struct OnboardingCardView: View {
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { _ in guard isSettled else { return }; isPressed = true }
-                            .onEnded   { _             in isPressed = false }
+                            .onEnded   { _ in isPressed = false; if isSettled { shimmerTrigger += 1 } }
                     )
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Monzo Business Card for CAKE EXPECTATIONS")
@@ -146,13 +146,13 @@ struct OnboardingCardView: View {
                             .fill(Color(hex: "#75817E").opacity(0.10))
                     )
 
-                    Button("Add money") {
-                        navigateToAddMoney = true
+                    Button { navigateToAddMoney = true } label: {
+                        Text("Add money")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
                     }
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
                     .background(Capsule().fill(Color(hex: "#218FB7")))
                     .buttonStyle(PressScaleButtonStyle())
                 }
@@ -206,29 +206,37 @@ struct OnboardingCardView: View {
             return
         }
 
-        // 150ms — card spring-drops from above its VStack position
-        Task {
-            try? await Task.sleep(for: .milliseconds(150))
-            guard gen == entranceGeneration else { return }
-            withAnimation(.spring(duration: 1.0, bounce: 0.1)) {
-                cardOffsetY = 0
-                cardScale   = 1.0
-            }
-            withAnimation(.easeOut(duration: 0.75)) {
-                shadowOpacity = 0.45
-            }
+        // Visual animations — delay replaces Task.sleep chains
+        withAnimation(.spring(duration: 1.0, bounce: 0.1).delay(0.15)) {
+            cardOffsetY = 0
+            cardScale   = 1.0
+        }
+        withAnimation(.easeOut(duration: 0.75).delay(0.15)) {
+            shadowOpacity = 0.45
+        }
+        withAnimation(.easeOut(duration: 0.35).delay(0.55)) {
+            contentOpacity = 1
+        }
+        withAnimation(.spring(duration: 0.7, bounce: 0.1).delay(0.97)) {
+            headlineOpacity = 1
+            headlineDriftY  = 0
+        }
+        withAnimation(.easeOut(duration: 0.4).delay(1.17)) {
+            subtitleOpacity = 1
+        }
+        withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true).delay(1.32)) {
+            floatOffsetY  = -4
+            shadowY       = 18
+            shadowOpacity = 0.32
+        }
+        withAnimation(.easeInOut(duration: 4.7).repeatForever(autoreverses: true).delay(1.32)) {
+            floatOffsetX = 2
+        }
+        withAnimation(.easeOut(duration: 0.4).delay(1.50)) {
+            ctaOpacity = 1
         }
 
-        // 550ms — card face reveals
-        Task {
-            try? await Task.sleep(for: .milliseconds(550))
-            guard gen == entranceGeneration else { return }
-            withAnimation(.easeOut(duration: 0.35)) {
-                contentOpacity = 1
-            }
-        }
-
-        // 870ms — card settles
+        // Side effects only — Tasks remain for haptic, sound, settle flag, and symbol effects
         Task {
             try? await Task.sleep(for: .milliseconds(870))
             guard gen == entranceGeneration else { return }
@@ -238,48 +246,12 @@ struct OnboardingCardView: View {
             CardSoundEngine.shared.playLand()
         }
 
-        // 970ms — headline drifts in (the exhale)
         Task {
             try? await Task.sleep(for: .milliseconds(970))
             guard gen == entranceGeneration else { return }
             CardSoundEngine.shared.playShimmer()
-            withAnimation(.spring(duration: 0.7, bounce: 0.1)) {
-                headlineOpacity = 1
-                headlineDriftY  = 0
-            }
         }
 
-        // 1170ms — subtitle fades in
-        Task {
-            try? await Task.sleep(for: .milliseconds(1170))
-            guard gen == entranceGeneration else { return }
-            withAnimation(.easeOut(duration: 0.4)) {
-                subtitleOpacity = 1
-            }
-        }
-
-        // 1320ms — idle float begins
-        Task {
-            try? await Task.sleep(for: .milliseconds(1320))
-            guard gen == entranceGeneration else { return }
-            withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true)) {
-                floatOffsetY  = -4
-                shadowY       = 18
-                shadowOpacity = 0.32
-            }
-            withAnimation(.easeInOut(duration: 4.7).repeatForever(autoreverses: true)) {
-                floatOffsetX = 2
-            }
-        }
-
-        // 1500ms — CTA fades in
-        Task {
-            try? await Task.sleep(for: .milliseconds(1500))
-            guard gen == entranceGeneration else { return }
-            withAnimation(.easeOut(duration: 0.4)) {
-                ctaOpacity = 1
-            }
-        }
     }
 }
 
